@@ -90,3 +90,28 @@ def update_plant(plant_name: str, updated_plant: Plants):
             status_code=500,
             detail=f"Terjadi kesalahan saat memperbarui data tanaman: {str(e)}"
         )
+    
+@router.delete("/{plant_name}", response_model=SuccessResponse)
+def delete_plant(plant_name: str):
+    try:
+        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_name)
+        plant_doc = plant_ref.get()
+
+        if not plant_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tanaman dengan nama {plant_name} tidak ditemukan"
+            )
+
+        plant_ref.delete()
+
+        return {"message": "Tanaman berhasil dihapus"}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Terjadi kesalahan saat menghapus data tanaman: {str(e)}"
+        )
