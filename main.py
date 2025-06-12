@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 from api.main import api_router
 

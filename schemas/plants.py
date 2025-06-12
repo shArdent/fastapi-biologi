@@ -1,18 +1,6 @@
 from pydantic import BaseModel
 from typing import List
 
-class Plants(BaseModel):
-    name: str
-    faq: List[FAQ]
-    distribution: List[str]
-    characteristics: Characteristics
-    care_conditions: CareConditions
-    use: str
-    adaptation_strategy: str
-    history: str
-    name_origin: str
-    symbolism: str
-
 class FAQ(BaseModel):
     question: str
     answer: str
@@ -24,12 +12,25 @@ class Characteristics(BaseModel):
     leaf_type: str
     planting_time: List[str]
 
+class Climate(BaseModel):
+    temperature: str
+    hardness: str
+
+
 class CareConditions(BaseModel):
     soil: List[str]
     location: str
     sunlight: str
     climate: Climate
 
-class Climate(BaseModel):
-    temperature: str
-    hardness: str
+class Plants(BaseModel):
+    name: str
+    faq: List[FAQ]
+    distribution: List[str]
+    characteristics: Characteristics
+    care_conditions: CareConditions
+    use: str
+    adaptation_strategy: str
+    history: str
+    name_origin: str
+    symbolism: str

@@ -1,6 +1,14 @@
 from pydantic import BaseModel
 from typing import List
 
+class RecoveryStep(BaseModel):
+    head: str
+    description: str
+
+class RecoveryCare(BaseModel):
+    title: str
+    step: List[RecoveryStep]
+
 class Diseases(BaseModel):
     name: str
     plants_listed: List[str]
@@ -9,11 +17,3 @@ class Diseases(BaseModel):
     prevention: List[str]
     cause: List[str]
     recovery_care: List[RecoveryCare]
-
-class RecoveryCare(BaseModel):
-    title: str
-    step: List[RecoveryStep]
-
-class RecoveryStep(BaseModel):
-    head: str
-    description: str
