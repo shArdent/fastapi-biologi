@@ -65,3 +65,28 @@ def get_plant_by_name(plant_name:str):
             status_code=500,
             detail=f"Terjadi kesalahan saat mengambil data tanaman: {str(e)}"
         )
+
+@router.patch("/{plant_name}", response_model=SuccessResponse)
+def update_plant(plant_name: str, updated_plant: Plants):
+    try:
+        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_name)
+        plant_doc = plant_ref.get()
+
+        if not plant_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tanaman dengan nama {plant_name} tidak ditemukan"
+            )
+
+        plant_ref.update(updated_plant.model_dump(exclude_unset=True))
+
+        return {"message": "Tanaman berhasil diperbarui"}
+    
+    except HTTPException as http_exc:
+        raise http_exc
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Terjadi kesalahan saat memperbarui data tanaman: {str(e)}"
+        )
