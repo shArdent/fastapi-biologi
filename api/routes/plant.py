@@ -42,3 +42,26 @@ def get_all_plants():
             status_code=500,
             detail=f"Terjadi kesalahan saat mengambil data tanaman: {str(e)}"
         )
+    
+@router.get("/{plant_name}", response_model=Plants)
+def get_plant_by_name(plant_name:str):
+    try:
+        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_name)
+        plant_doc = plant_ref.get()
+
+        if not plant_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tanaman dengan nama {plant_name} tidak ditemukan"
+            )
+
+        return Plants(**plant_doc.to_dict())
+    
+    except HTTPException as http_exc:
+        raise http_exc
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Terjadi kesalahan saat mengambil data tanaman: {str(e)}"
+        )
