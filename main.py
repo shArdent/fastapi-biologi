@@ -1,10 +1,25 @@
 from fastapi import FastAPI
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.main import api_router
 
 load_dotenv()
 
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",  # contoh frontend lokal
+    "http://localhost:5173",  # contoh frontend lokal
+    "https://your-frontend-domain.com",  # frontend production
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # atau ["*"] untuk semua origin
+    allow_credentials=True,
+    allow_methods=["*"],     # atau ["GET", "POST", ...]
+    allow_headers=["*"],     # atau header tertentu: ["Authorization", "Content-Type"]
+)
 
 app.include_router(api_router, prefix="/api")
