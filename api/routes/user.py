@@ -57,16 +57,13 @@ def add_my_plant(user_id: str, plant_data: MyPlantCreate):
         if plant_data.disease_id:
             disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(plant_data.disease_id)
 
-            data_to_save["disease_ref"] = disease_ref
-
             if not disease_ref.get().exists:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Penyakit dengan ID '{plant_data.disease_id}' tidak ditemukan.")
-        
-        
-        timestamp, new_plant_ref = my_plants_collection.add(data_to_save)
-        
-        print(new_plant_ref)
+            
+            data_to_save["disease_ref"] = disease_ref
 
+        _, new_plant_ref = my_plants_collection.add(data_to_save)
+        
         return {
             "message": "Tanaman berhasil ditambahkan!",
             "user_id": user_id,
