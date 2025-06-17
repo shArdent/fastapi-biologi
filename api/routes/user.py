@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query
+from typing import Optional
 from google.cloud.exceptions import GoogleCloudError
 from firebase_admin import firestore
 
 from db.firestore import db
 from schemas.users import User
-from schemas.my_plants import MyPlantCreate
+from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary
 from utils.verify_token import verify_firebase_token
 from constants.collection_name import FIRESTORE_COLLECTION_USERS, FIRESTORE_COLLECTION_MY_PLANTS, FIRESTORE_COLLECTION_PLANTS, FIRESTORE_COLLECTION_DISEASES
 
@@ -77,3 +78,70 @@ def add_my_plant(user_id: str, plant_data: MyPlantCreate):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+@router.get("/{user_id}/my-plants", response_model=PaginatedMyPlantSummary)
+def get_all_my_plants(
+    user_id: str,
+    page_size: int = Query(10, gt=0, le=50, description="Number of items per page"),
+    last_doc_id: Optional[str] = Query(None, description="ID of the last document from the previous page to fetch the next page")
+):
+    try:
+        my_plants_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(user_id).collection(FIRESTORE_COLLECTION_MY_PLANTS)
+
+        query = my_plants_ref.order_by("added_at", direction=FirestoreQuery.DESCENDING)
+            
+        if last_doc_id:
+            last_doc_snapshot = my_plants_ref.document(last_doc_id).get()
+            if last_doc_snapshot.exists:
+                query = query.start_after(last_doc_snapshot)
+            else:
+                return PaginatedPlantSummary(data=[], last_doc_id=None)
+
+        query = query.limit(page_size)
+        my_plants_docs = list(query.stream())
+
+        summary_list = []
+        for doc in my_plants_docs:
+            my_plant_data = doc.to_dict()
+            
+            plant_ref = my_plant_data.get('plant_ref')
+            if not plant_ref:
+                continue
+
+            plant_doc = plant_ref.get()
+            if not plant_doc.exists:
+                plant_name = "Data Tanaman Tidak Ditemukan"
+            else:
+                plant_name = plant_doc.to_dict().get('name', 'Tanpa Nama')
+                plant_id = plant_doc.id
+
+            my_plant_data_sent = {
+                "id" : doc.id,
+                "nickname": my_plant_data.get('nickname', ''),
+                "plant_name": plant_name,
+                "plant_id": plant_doc.id
+            }
+
+            disease_ref = my_plant_data.get('disease_ref')
+            disease_id = None
+            disease_name = None
+
+            if disease_ref:
+                disease_doc = disease_ref.get()
+                if disease_doc.exists:
+                    disease_id = disease_doc.id
+                    disease_name = disease_doc.to_dict().get('name', 'Tanpa Nama')
+
+            my_plant_data_sent["disease_id"] = disease_id
+            my_plant_data_sent["disease_name"] = disease_name
+
+            summary_list.append(
+                MyPlantSummary(**my_plant_data_sent)
+            )
+
+        new_last_doc_id = my_plants_docs[-1].id if len(my_plants_docs) == page_size else None
+
+        return PaginatedPlantSummary(data=summary_list, last_doc_id=new_last_doc_id)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
