@@ -4,3 +4,4 @@ env/
 models/
 creds/
 .env
+.idea/
