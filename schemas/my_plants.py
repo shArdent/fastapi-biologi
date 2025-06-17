@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional
 
+from schemas.default_success import SuccessResponse
+
 class MyPlantCreate(BaseModel):
     nickname: str
     plant_id: str
@@ -16,3 +18,13 @@ class MyPlantSummary(MyPlantOut):
 class PaginatedMyPlantSummary(BaseModel):
     data: list[MyPlantSummary]
     last_doc_id: Optional[str] = None
+
+class MyPlantUpdate(BaseModel):
+    nickname: Optional[str] = None
+    disease_id: Optional[str] = None 
+
+class SuccessUpdatePlant(SuccessResponse):
+    my_plant_id: str
+    updated_data: MyPlantCreate
+    
+

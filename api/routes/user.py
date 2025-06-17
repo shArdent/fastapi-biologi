@@ -5,7 +5,7 @@ from firebase_admin import firestore
 
 from db.firestore import db
 from schemas.users import User
-from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary
+from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary, MyPlantUpdate, SuccessUpdatePlant
 from utils.verify_token import verify_firebase_token
 from constants.collection_name import FIRESTORE_COLLECTION_USERS, FIRESTORE_COLLECTION_MY_PLANTS, FIRESTORE_COLLECTION_PLANTS, FIRESTORE_COLLECTION_DISEASES
 
@@ -145,3 +145,50 @@ def get_all_my_plants(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.patch("/{user_id}/my-plants/{my_plant_id}", status_code=status.HTTP_200_OK, response_model=SuccessUpdatePlant)
+def update_my_plant(user_id: str, my_plant_id: str, plant_update_data: MyPlantUpdate):
+    try:
+        doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(user_id).collection(FIRESTORE_COLLECTION_MY_PLANTS).document(my_plant_id)
+        main_doc = doc_ref.get()
+
+        if not main_doc.exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tanaman dengan ID '{my_plant_id}' tidak ditemukan.")
+
+        data_to_update = {}
+
+        if plant_update_data.nickname is not None:
+            data_to_update["nickname"] = plant_update_data.nickname
+
+        if plant_update_data.disease_id is not None:
+            disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(plant_update_data.disease_id)
+            if not disease_ref.get().exists:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Penyakit dengan ID '{plant_update_data.disease_id}' tidak ditemukan.")
+            data_to_update["disease_ref"] = disease_ref
+        elif plant_update_data.disease_id is None:
+            data_to_update["disease_ref"] = None
+
+        if not data_to_update:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tidak ada data untuk diupdate.")
+
+        doc_ref.update(data_to_update)
+
+        updated_doc = doc_ref.get()
+        updated_doc_id = updated_doc.id
+        updated_doc_data = updated_doc.to_dict()
+        updated_doc_plant_id = updated_doc_data['plant_ref'].id
+
+        return {
+            "message": "Tanaman berhasil diupdate!",
+            "my_plant_id": updated_doc_id,
+            "updated_data": {
+                "plant_id": updated_doc_plant_id,
+                "nickname": updated_doc_data['nickname'],
+                "disease_id": plant_update_data.disease_id
+            }
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
