@@ -5,7 +5,7 @@ from firebase_admin import firestore
 
 from db.firestore import db
 from schemas.users import User
-from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary, MyPlantUpdate, SuccessUpdatePlant
+from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary, MyPlantUpdate, SuccessUpdatePlant, SuccessResponse
 from utils.verify_token import verify_firebase_token
 from constants.collection_name import FIRESTORE_COLLECTION_USERS, FIRESTORE_COLLECTION_MY_PLANTS, FIRESTORE_COLLECTION_PLANTS, FIRESTORE_COLLECTION_DISEASES
 
@@ -188,6 +188,25 @@ def update_my_plant(user_id: str, my_plant_id: str, plant_update_data: MyPlantUp
             }
         }
 
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/{user_id}/my-plants/{my_plant_id}", status_code=status.HTTP_200_OK, response_model=SuccessResponse)
+def delete_my_plant(user_id: str, my_plant_id: str):
+    try:
+        doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(user_id).collection(FIRESTORE_COLLECTION_MY_PLANTS).document(my_plant_id)
+        
+        if not doc_ref.get().exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Tanaman dengan ID '{my_plant_id}' tidak ditemukan untuk dihapus.")
+
+        doc_ref.delete()
+
+        return {
+            "message": "Tanaman berhasil dihapus.",
+        }
+        
     except HTTPException as e:
         raise e
     except Exception as e:
