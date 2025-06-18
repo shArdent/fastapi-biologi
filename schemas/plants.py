@@ -34,3 +34,8 @@ class Plants(BaseModel):
     history: str
     name_origin: str
     symbolism: str
+
+class PlantsPaginatedResponse(BaseModel):
+    plants: list[Plants]
+    total_items: int
+    max_page: int

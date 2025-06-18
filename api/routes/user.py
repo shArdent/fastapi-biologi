@@ -9,7 +9,7 @@ from schemas.my_plants import MyPlantCreate, PaginatedMyPlantSummary, MyPlantUpd
 from utils.verify_token import verify_firebase_token
 from constants.collection_name import FIRESTORE_COLLECTION_USERS, FIRESTORE_COLLECTION_MY_PLANTS, FIRESTORE_COLLECTION_PLANTS, FIRESTORE_COLLECTION_DISEASES
 
-router = APIRouter(prefix="/users", tags=["register"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 @router.post("/register")
 def register_user(profile: User, user=Depends(verify_firebase_token)):
