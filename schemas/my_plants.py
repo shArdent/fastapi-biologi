@@ -19,6 +19,10 @@ class PaginatedMyPlantSummary(BaseModel):
     data: list[MyPlantSummary]
     last_doc_id: Optional[str] = None
 
+class SuccessCreatePlant(SuccessResponse):
+    user_id: str
+    new_plant_id: str
+
 class MyPlantUpdate(BaseModel):
     nickname: Optional[str] = None
     disease_id: Optional[str] = None 
