@@ -1,8 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from google.cloud.firestore_v1 import Increment, field_path
+from typing import Optional
 
 from db.firestore import db
-from constants.collection_name import FIRESTORE_COLLECTION_DISEASES
-from schemas.diseases import Diseases
+from constants.collection_name import FIRESTORE_COLLECTION_DISEASES, FIRESTORE_DOCUMENT_METADATA
+from schemas.diseases import Diseases, DiseasesPaginatedResponse
 from schemas.default_success import SuccessResponse
 
 router = APIRouter(prefix="/diseases", tags=["diseases"])
@@ -10,7 +12,6 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
 @router.post("/", response_model=SuccessResponse, status_code=201)
 def add_new_disease(new_disease: Diseases):
     try:
-
         is_exist = db.collection(FIRESTORE_COLLECTION_DISEASES).document(new_disease.name).get().exists
         if is_exist:
             raise HTTPException(
@@ -19,37 +20,74 @@ def add_new_disease(new_disease: Diseases):
             )
 
         db.collection(FIRESTORE_COLLECTION_DISEASES).document(new_disease.name).set(new_disease.model_dump())
+        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(FIRESTORE_DOCUMENT_METADATA)
+        meta_ref.set({"total_items": Increment(1)}, merge=True)
 
-
-        return {"message": "Penyakit baru berhasil ditambahkan"}
+        return SuccessResponse(message="Penyakit baru berhasil ditambahkan")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        return {"error": str(e), "message": "Gagal menambahkan penyakit baru"}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gagal menambahkan penyakit baru: {str(e)}"
+        )
 
-@router.get("/", response_model=list[Diseases])
-def get_all_disease():
+@router.get("/", response_model=DiseasesPaginatedResponse)
+def get_all_diseases(
+    limit: int = Query(10, ge=1, le=100),
+    start_after_doc_id: Optional[str] = Query(None, description="ID dokumen terakhir dari halaman sebelumnya")
+):
     try:
         diseases_ref = db.collection(FIRESTORE_COLLECTION_DISEASES)
-        docs = diseases_ref.stream()
+        query = diseases_ref.order_by(field_path.FieldPath.document_id())
 
-        diseases = [Diseases(**doc.to_dict()) for doc in docs]
+        if start_after_doc_id:
+            start_doc = diseases_ref.document(start_after_doc_id).get()
+            if not start_doc.exists:
+                raise HTTPException(status_code=404, detail=f"Dokumen dengan ID '{start_after_doc_id}' tidak ditemukan.")
+            query = query.start_after(start_doc)
 
-        return diseases
+        docs = query.limit(limit).stream()
+
+        diseases = []
+        for doc in docs:
+            if doc.id == FIRESTORE_DOCUMENT_METADATA:
+                continue
+            disease_data = doc.to_dict()
+            disease_data["id"] = doc.id
+            diseases.append(Diseases(**disease_data))
+
+        meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
+        if not meta_doc.exists or "total_items" not in meta_doc.to_dict():
+            raise HTTPException(status_code=500, detail="Metadata jumlah penyakit tidak tersedia.")
+
+        total_items = meta_doc.to_dict()["total_items"]
+        max_page = (total_items + limit - 1) // limit
+
+        return DiseasesPaginatedResponse(
+            diseases=diseases,
+            total_items=total_items,
+            max_page=max_page
+        )
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}"
         )
-    
-@router.get("/{disease_name}", response_model=Diseases)
-def get_disease_by_name(disease_name:str):
+
+@router.get("/{disease_id}", response_model=Diseases)
+def get_disease_by_id(disease_id:str):
     try:
-        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_name)
+        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
         disease_doc = disease_ref.get()
 
         if not disease_doc.exists:
             raise HTTPException(
                 status_code=404,
-                detail=f"Penyakit dengan nama {disease_name} tidak ditemukan"
+                detail=f"Penyakit dengan nama {disease_id} tidak ditemukan"
             )
 
         return Diseases(**disease_doc.to_dict())
@@ -63,19 +101,19 @@ def get_disease_by_name(disease_name:str):
             detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}"
         )
 
-@router.patch("/{disease_name}", response_model=SuccessResponse)
-def update_disease(disease_name: str, updated_disease: Diseases):
+@router.patch("/{disease_id}", response_model=SuccessResponse)
+def update_disease(disease_id: str, updated_disease: Diseases):
     try:
-        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_name)
+        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
         disease_doc = disease_ref.get()
 
         if not disease_doc.exists:
             raise HTTPException(
                 status_code=404,
-                detail=f"penyakit dengan nama {disease_name} tidak ditemukan"
+                detail=f"penyakit dengan nama {disease_id} tidak ditemukan"
             )
 
-        disease_ref.update(updated_disease).model_dump(exclude_unset=True)
+        disease_ref.update(updated_disease.model_dump(exclude_unset=True))
 
         return {"message": "Penyakit berhasil diperbarui"}
     
@@ -87,22 +125,24 @@ def update_disease(disease_name: str, updated_disease: Diseases):
             status_code=500,
             detail=f"Terjadi kesalahan saat memperbarui data penyakit: {str(e)}"
         )
-    
-@router.delete("/{disease_name}", response_model=SuccessResponse)
-def delete_disease(disease_name: str):
+@router.delete("/{disease_id}", response_model=SuccessResponse)
+def delete_disease(disease_id: str):
     try:
-        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_name)
+        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
         disease_doc = disease_ref.get()
 
         if not disease_doc.exists:
             raise HTTPException(
                 status_code=404,
-                detail=f"Penyakit dengan nama {disease_name} tidak ditemukan"
+                detail=f"Penyakit dengan nama {disease_id} tidak ditemukan"
             )
 
         disease_ref.delete()
 
-        return {"message": "Penyakit berhasil dihapus"}
+        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(FIRESTORE_DOCUMENT_METADATA)
+        meta_ref.update({"total_items": Increment(-1)})
+
+        return SuccessResponse(message="Penyakit berhasil dihapus")
     
     except HTTPException as http_exc:
         raise http_exc
@@ -112,3 +152,4 @@ def delete_disease(disease_name: str):
             status_code=500,
             detail=f"Terjadi kesalahan saat menghapus data penyakit: {str(e)}"
         )
+

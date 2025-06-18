@@ -17,3 +17,8 @@ class Diseases(BaseModel):
     prevention: List[str]
     cause: List[str]
     recovery_care: List[RecoveryCare]
+
+class DiseasesPaginatedResponse(BaseModel):
+    diseases: list[Diseases]
+    total_items: int
+    max_page: int
