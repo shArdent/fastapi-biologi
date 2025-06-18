@@ -1,14 +1,18 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from PIL import Image
 from fastapi.responses import JSONResponse
-
+from typing import Optional
 import io
 import numpy as np
 import tensorflow as tf
 
 from constants.labels import class_names, plant_translate
 from utils.preprocess_image import preprocess_image
-from schemas.predict_response import PredictResponse
+from schemas.predict_response import PredictResponse, PlantDetail
+from schemas.plants import Plants
+from schemas.diseases import Diseases
+from db.firestore import db
+from constants.collection_name import FIRESTORE_COLLECTION_PLANTS, FIRESTORE_COLLECTION_DISEASES
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 model = tf.keras.models.load_model("models/env2l.h5")
@@ -45,3 +49,45 @@ async def predict(file: UploadFile = File(...)):
         )
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@router.get("/detail", response_model=PlantDetail)
+def get_plant_and_disease_detail(plant_id: str, disease_id:Optional[str]):
+    try:
+        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
+        plant_doc = plant_ref.get()
+
+        if not plant_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Tanaman dengan nama {plant_id} tidak ditemukan"
+            )
+
+        plant = Plants(**plant_doc.to_dict())
+
+        disease = None
+        if disease_id:
+            disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
+            disease_doc = disease_ref.get()
+
+            if not disease_doc.exists:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Penyakit dengan ID {disease_id} tidak ditemukan"
+                )
+
+
+            disease = Diseases(**disease_doc.to_dict())
+
+
+        return PlantDetail(plant_data=plant, disease_data=disease)
+
+    except HTTPException as he:
+        raise he
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}"
+        )
+
+
