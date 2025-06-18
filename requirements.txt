@@ -5,3 +5,4 @@ python-multipart
 numpy
 pillow>=9.3
 tensorflow
+firebase-admin

@@ -18,7 +18,8 @@ from schemas.my_plants import (
     SuccessResponse,
     SuccessCreatePlant,
 )
-from utils.verify_token import verify_firebase_token
+from utils.middlewares.verify_token import verify_firebase_token
+from utils.middlewares.verify_user_id_match import verify_user_id_match
 from constants.collection_name import (
     FIRESTORE_COLLECTION_USERS,
     FIRESTORE_COLLECTION_MY_PLANTS,
@@ -79,7 +80,9 @@ def register_user(profile: User, user=Depends(verify_firebase_token)):
     response_model=SuccessCreatePlant,
     status_code=status.HTTP_201_CREATED,
 )
-def add_my_plant(user_id: str, plant_data: MyPlantCreate):
+def add_my_plant(
+    user_id: str, plant_data: MyPlantCreate, _: dict = Depends(verify_user_id_match)
+):
     try:
         my_plants_collection = (
             db.collection(FIRESTORE_COLLECTION_USERS)
@@ -136,6 +139,7 @@ def get_all_my_plants(
     user_id: str,
     page_size: int = Query(10, gt=0, le=50),
     last_doc_id: Optional[str] = None,
+    _: dict = Depends(verify_user_id_match),
 ):
     try:
         my_plants_ref = (
@@ -215,7 +219,12 @@ def get_all_my_plants(
     status_code=status.HTTP_200_OK,
     response_model=SuccessUpdatePlant,
 )
-def update_my_plant(user_id: str, my_plant_id: str, plant_update_data: MyPlantUpdate):
+def update_my_plant(
+    user_id: str,
+    my_plant_id: str,
+    plant_update_data: MyPlantUpdate,
+    _: dict = Depends(verify_user_id_match),
+):
     try:
         doc_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
@@ -280,7 +289,9 @@ def update_my_plant(user_id: str, my_plant_id: str, plant_update_data: MyPlantUp
 
 
 @router.delete("/{user_id}/my-plants/{my_plant_id}", response_model=SuccessResponse)
-def delete_my_plant(user_id: str, my_plant_id: str):
+def delete_my_plant(
+    user_id: str, my_plant_id: str, _: dict = Depends(verify_user_id_match)
+):
     try:
         doc_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
