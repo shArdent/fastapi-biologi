@@ -1,59 +1,78 @@
 from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 from google.cloud.firestore_v1.base_query import FieldFilter  
+from google.cloud.firestore_v1 import Increment
 
 from db.firestore import db
-from constants.collection_name import FIRESTORE_COLLECTION_ARTICLES
-from schemas.articles import Article, ArticleOut, ArticlePaged
+from constants.collection_name import FIRESTORE_COLLECTION_ARTICLES, FIRESTORE_DOCUMENT_METADATA
+from schemas.articles import Article, ArticleOut, ArticlePaginatedResponse
 from schemas.default_success import SuccessResponse
 
 router = APIRouter(prefix="/articles", tags=["articles"])
-\
+
+
 @router.post("/", response_model=SuccessResponse, status_code=201)
 def add_new_article(new_article: Article):
     try:
+        query = db.collection(FIRESTORE_COLLECTION_ARTICLES).where(
+            filter=FieldFilter('title', '==', new_article.title)
+        ).get()
 
-        is_exist = db.collection(FIRESTORE_COLLECTION_ARTICLES).where(filter=FieldFilter('title', '==', new_article.title)).get()
-        if is_exist:
+        if query:
             raise HTTPException(
                 status_code=400,
-                detail=f"Artikel dengan judul {new_article.title} sudah ada"
+                detail=f"Artikel dengan judul '{new_article.title}' sudah ada"
             )
 
         db.collection(FIRESTORE_COLLECTION_ARTICLES).add(new_article.model_dump())
 
+        meta_ref = db.collection(FIRESTORE_COLLECTION_ARTICLES).document(FIRESTORE_DOCUMENT_METADATA)
+        meta_ref.set({"total_items": Increment(1)}, merge=True)
 
-        return {"message": "Artikel baru berhasil ditambahkan"}
+        return SuccessResponse(message="Artikel baru berhasil ditambahkan")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        return {"error": str(e), "message": "Gagal menambahkan artikel baru"}
+        raise HTTPException(
+            status_code=500,
+            detail=f"Gagal menambahkan artikel baru: {str(e)}"
+        )
 
-@router.get("/", response_model=ArticlePaged)
+@router.get("/", response_model=ArticlePaginatedResponse)
 def get_articles_paginated(limit: int = Query(10, gt=0, le=50), start_after_id: Optional[str] = None):
     try:
-        query = db.collection(FIRESTORE_COLLECTION_ARTICLES).order_by("__name__")
-    
-        if start_after_id:
-                start_doc_ref = db.collection(FIRESTORE_COLLECTION_ARTICLES).document(start_after_id)
-                start_doc = start_doc_ref.get()
+        articles_ref = db.collection(FIRESTORE_COLLECTION_ARTICLES)
+        query = articles_ref.order_by("__name__")
 
-                if not start_doc.exists:
-                    raise HTTPException(status_code=404, detail="Pagination token is invalid.")
-                
-                query = query.start_after(start_doc)
+        if start_after_id:
+            start_doc = articles_ref.document(start_after_id).get()
+            if not start_doc.exists:
+                raise HTTPException(status_code=404, detail="Pagination token is invalid.")
+            query = query.start_after(start_doc)
 
         docs = query.limit(limit).stream()
         articles = []
+        last_doc_id = None
 
         for doc in docs:
+            if doc.id == FIRESTORE_DOCUMENT_METADATA:
+                continue
             data = ArticleOut(**doc.to_dict(), id=doc.id)
             articles.append(data)
             last_doc_id = doc.id
-        
-        next_token = None
-        if len(articles) == limit:
-            next_token = last_doc_id
-            
-        return ArticlePaged(articles=articles, next_page_token=next_token)
+
+        meta_doc = articles_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
+        if not meta_doc.exists or "total_items" not in meta_doc.to_dict():
+            raise HTTPException(status_code=500, detail="Metadata jumlah artikel tidak tersedia.")
+        total_items = meta_doc.to_dict()["total_items"]
+        max_page = (total_items + limit - 1) // limit
+
+        return ArticlePaginatedResponse(
+            articles=articles,
+            total_items=total_items,
+            max_page=max_page,
+            next_page_token=last_doc_id if len(articles) == limit else None
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -97,7 +116,7 @@ def update_article(id: str, updated_articles: Article):
 
         article_ref.update(updated_articles.model_dump(exclude_unset=True))
 
-        return {"message": "Artikel berhasil diperbarui"}
+        return SuccessResponse(message="Artikel berhasil diperbarui")
     
     except HTTPException as http_exc:
         raise http_exc
@@ -107,7 +126,9 @@ def update_article(id: str, updated_articles: Article):
             status_code=500,
             detail=f"Terjadi kesalahan saat memperbarui data artikel: {str(e)}"
         )
+
     
+
 @router.delete("/{id}", response_model=SuccessResponse)
 def delete_article(id: str):
     try:
@@ -122,7 +143,10 @@ def delete_article(id: str):
 
         article_ref.delete()
 
-        return {"message": "Artikel berhasil dihapus"}
+        meta_ref = db.collection(FIRESTORE_COLLECTION_ARTICLES).document(FIRESTORE_DOCUMENT_METADATA)
+        meta_ref.update({"total_items": Increment(-1)})
+
+        return SuccessResponse(message="Artikel berhasil dihapus")
     
     except HTTPException as http_exc:
         raise http_exc
@@ -132,3 +156,4 @@ def delete_article(id: str):
             status_code=500,
             detail=f"Terjadi kesalahan saat menghapus data artikel: {str(e)}"
         )
+
