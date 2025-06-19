@@ -6,6 +6,7 @@ from google.cloud.firestore_v1 import (
     SERVER_TIMESTAMP,
     Query as FirestoreQuery,
 )
+from firebase_admin import auth
 
 from db.firestore import db
 from schemas.users import User
@@ -73,6 +74,46 @@ def register_user(profile: User, user=Depends(verify_firebase_token)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal melakukan registrasi: {e}",
         )
+
+@router.post("/admin-reg", response_model=SuccessResponse)
+def register_admin(user=Depends(verify_firebase_token)):
+    uid = user.get("uid")
+
+    try:
+        user_doc = db.collection(FIRESTORE_COLLECTION_USERS).document(uid).get()
+
+        if not user_doc.exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Akun tidak ditemukan"
+            )
+
+        user_dict = user_doc.to_dict() 
+
+        if user_dict is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Akun tidak ditemukan"
+            )
+
+        if user_dict["role"] != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Anda bukan admin"
+            )
+
+        auth.set_custom_user_claims(uid, {'isAdmin' : True})
+
+        return SuccessResponse(message="Berhasil login admin")
+    except HTTPException as he:
+        raise he
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal melakukan registrasi: {e}",
+        )
+
 
 
 @router.post(

@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import io
 import numpy as np
+from starlette.concurrency import run_in_threadpool
 import tensorflow as tf
 
 from constants.labels import class_names, plant_translate
@@ -31,7 +32,7 @@ async def predict(file: UploadFile = File(...)):
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
         input_tensor = preprocess_image(image)
-        prediction = model.predict(input_tensor)
+        prediction = await run_in_threadpool(model.predict, input_tensor)
         predicted_class = class_names[np.argmax(prediction)]
         confidence = float(np.max(prediction))
 

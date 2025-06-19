@@ -6,3 +6,4 @@ models/
 creds/
 .env
 .idea/
+.vscode
