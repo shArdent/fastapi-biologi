@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, status 
+from fastapi import APIRouter, HTTPException, Depends, status
 from google.cloud.exceptions import GoogleCloudError
 from google.cloud.firestore_v1 import (
     SERVER_TIMESTAMP,
@@ -6,7 +6,7 @@ from google.cloud.firestore_v1 import (
 from firebase_admin import auth
 
 from db.firestore import db
-from schemas.users import User
+from schemas.users import User, UserUpdate
 from schemas.my_plants import (
     SuccessResponse,
 )
@@ -96,4 +96,47 @@ def register_admin(user=Depends(verify_firebase_token)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal melakukan registrasi: {e}",
+        )
+
+
+@router.patch("/", response_model=SuccessResponse)
+def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
+    uid = user.get("uid")
+
+    if not update_data.model_dump(exclude_unset=True):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tidak ada data yang dikirim untuk diupdate",
+        )
+
+    try:
+        doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(uid)
+
+        if not doc_ref.get().exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User belum terdaftar"
+            )
+
+        if update_data.username:
+            existing = (
+                db.collection(FIRESTORE_COLLECTION_USERS)
+                .where("username", "==", update_data.username)
+                .where("uid", "!=", uid)
+                .limit(1)
+                .get()
+            )
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Username sudah digunakan oleh user lain",
+                )
+
+        doc_ref.update(update_data.model_dump(exclude_unset=True))
+
+        return SuccessResponse(message="Profile berhasil diupdate")
+
+    except GoogleCloudError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengupdate data: {e}",
         )

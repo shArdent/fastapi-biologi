@@ -1,39 +1,51 @@
 from pydantic import BaseModel
 from typing import List
 
+
 class FAQ(BaseModel):
     question: str
     answer: str
 
+
 class Characteristics(BaseModel):
     max_height: str
-    max_spread: str
     leaf_color: List[str]
-    leaf_type: str
-    planting_time: List[str]
+    flower_color: List[str]
+    flower_size: str
+    leaf_shape: str
+    stem_type: str
+    root_type: str
 
-class Climate(BaseModel):
-    temperature: str
-    hardness: str
+
+class PlantToxicity(BaseModel):
+    humans: str
+    animals: str
 
 
-class CareConditions(BaseModel):
-    soil: List[str]
-    location: str
-    sunlight: str
-    climate: Climate
+class BasicInformation(BaseModel):
+    toxicity: PlantToxicity
+    potential_weeds: str
+    habitats: str
+    type: str
+    life_expectacy: str
+
+
+class GrowInformation(BaseModel):
+    growing_time: str
+    harvest_season: str
+    harvest_time: str
+    life_expectacy: str
+
 
 class Plants(BaseModel):
     name: str
+    latin_name: str
+    description: str
     faq: List[FAQ]
-    distribution: List[str]
     characteristics: Characteristics
-    care_conditions: CareConditions
-    use: str
-    adaptation_strategy: str
-    history: str
-    name_origin: str
-    symbolism: str
+    grow_infromation: GrowInformation
+    use: List[str]
+
 
 class PlantsPaginatedResponse(BaseModel):
     plants: list[Plants]
