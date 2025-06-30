@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from schemas.plants import PlantResponse
-from schemas.diseases import Diseases
+from schemas.diseases import DiseaseResponse
 
 class PredictResponse(BaseModel):
     plant: str
@@ -12,4 +12,4 @@ class PredictResponse(BaseModel):
 
 class PlantDetail(BaseModel):
     plant_data : PlantResponse
-    disease_data: Optional[Diseases] = None
+    disease_data: Optional[DiseaseResponse] = None

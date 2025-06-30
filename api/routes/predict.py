@@ -12,7 +12,7 @@ from utils.middlewares.verify_token import verify_firebase_token
 from utils.preprocess_image import preprocess_image
 from schemas.predict_response import PredictResponse, PlantDetail
 from schemas.plants import PlantResponse
-from schemas.diseases import Diseases
+from schemas.diseases import DiseaseResponse
 from db.firestore import db
 from constants.collection_name import (
     FIRESTORE_COLLECTION_PLANTS,
@@ -105,7 +105,7 @@ def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
                     detail=f"Data penyakit dengan ID '{disease_id}' tidak valid",
                 )
 
-            disease = Diseases(**disease_data)
+            disease = DiseaseResponse(**disease_data)
 
         return PlantDetail(plant_data=plant, disease_data=disease)
 

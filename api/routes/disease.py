@@ -4,13 +4,15 @@ from typing import Optional
 
 from db.firestore import db
 from constants.collection_name import (
+    FIRESTORE_COLLECTION_DISEASE_CATEGORIES,
     FIRESTORE_COLLECTION_DISEASES,
     FIRESTORE_DOCUMENT_METADATA,
 )
-from schemas.diseases import Diseases, DiseasesPaginatedResponse
+from schemas.diseases import DiseaseCreate, DiseaseResponse, DiseasesPaginatedResponse
 from schemas.default_success import SuccessResponse
 from utils.middlewares.verify_is_admin import verify_is_admin
 from utils.middlewares.verify_token import verify_firebase_token
+from utils.slugify import slugify
 
 router = APIRouter(prefix="/diseases", tags=["diseases"])
 
@@ -19,36 +21,57 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     "/",
     response_model=SuccessResponse,
     status_code=201,
-    dependencies=[Depends(verify_is_admin)],
+    # dependencies=[Depends(verify_is_admin)],
 )
-def add_new_disease(new_disease: Diseases):
+def add_new_disease(new_disease: DiseaseCreate):
     try:
-        is_exist = (
-            db.collection(FIRESTORE_COLLECTION_DISEASES)
-            .document(new_disease.name)
-            .get()
-            .exists
-        )
-        if is_exist:
+        disease_id = slugify(new_disease.name)
+        disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
+
+        if disease_ref.get().exists:
             raise HTTPException(
                 status_code=400,
-                detail=f"Penyakit dengan nama {new_disease.name} sudah ada",
+                detail=f"Penyakit dengan nama '{new_disease.name}' sudah ada.",
             )
 
-        db.collection(FIRESTORE_COLLECTION_DISEASES).document(new_disease.name).set(
-            new_disease.model_dump()
+        # === LOGIKA BARU UNTUK KATEGORI ===
+        category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+            new_disease.category_id
         )
+        category_doc = category_ref.get()
+        if not category_doc.exists:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Kategori dengan ID '{new_disease.category_id}' tidak ditemukan.",
+            )
+        category_data = category_doc.to_dict()
+
+        if not category_data:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Data untuk kategori '{new_disease.category_id}' kosong atau korup.",
+            )
+
+        category_name = category_data.get("name")
+
+        data_to_save = new_disease.model_dump()
+        data_to_save.pop("category_id")
+        data_to_save["category_ref"] = category_ref
+        data_to_save["category_name"] = category_name
+
+        disease_ref.set(data_to_save)
+
         meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
             FIRESTORE_DOCUMENT_METADATA
         )
         meta_ref.set({"total_items": Increment(1)}, merge=True)
 
-        return SuccessResponse(message="Penyakit baru berhasil ditambahkan")
+        return SuccessResponse(message="Penyakit berhasil ditambahkan")
     except HTTPException as he:
         raise he
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Gagal menambahkan penyakit baru: {str(e)}"
+            status_code=500, detail=f"Gagal menambah data penyakit: {str(e)}"
         )
 
 
@@ -71,47 +94,53 @@ def get_all_diseases(
             start_doc = diseases_ref.document(start_after_doc_id).get()
             if not start_doc.exists:
                 raise HTTPException(
-                    status_code=404,
-                    detail=f"Dokumen dengan ID '{start_after_doc_id}' tidak ditemukan.",
+                    status_code=404, detail="Dokumen awal tidak ditemukan."
                 )
             query = query.start_after(start_doc)
 
         docs = query.limit(limit).stream()
-
         diseases = []
         for doc in docs:
             if doc.id == FIRESTORE_DOCUMENT_METADATA:
                 continue
+
             disease_data = doc.to_dict()
-            disease_data["id"] = doc.id
-            diseases.append(Diseases(**disease_data))
+            if not disease_data:
+                continue
+
+            category_ref = disease_data.get("category_ref")
+            response_data = {
+                **disease_data,
+                "id": doc.id,
+                "category": {
+                    "id": category_ref.id if category_ref else "unknown",
+                    "name": disease_data.get("category_name", "Tidak ada kategori"),
+                    "description": None,
+                },
+            }
+            diseases.append(DiseaseResponse(**response_data))
 
         meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
-        meta_doc_dict = meta_doc.to_dict()
-        if not meta_doc.exists or not meta_doc_dict or "total_items" not in meta_doc_dict:
-            raise HTTPException(
-                status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
-            )
+        meta_data = meta_doc.to_dict() if meta_doc.exists else {}
 
-        total_items = meta_doc_dict["total_items"]
+        if not meta_data:
+            raise HTTPException(
+                status_code=500,
+                detail="meta data kosong atau korup.",
+            )
+        total_items = meta_data.get("total_items", 0)
         max_page = (total_items + limit - 1) // limit
 
         return DiseasesPaginatedResponse(
             diseases=diseases, total_items=total_items, max_page=max_page
         )
-
-    except HTTPException as he:
-        raise he
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get(
     "/{disease_id}",
-    response_model=Diseases,
+    response_model=DiseaseResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
 def get_disease_by_id(disease_id: str):
@@ -129,25 +158,23 @@ def get_disease_by_id(disease_id: str):
         if not disease_data or not isinstance(disease_data, dict):
             raise HTTPException(
                 status_code=500,
-                detail="Data penyakit tidak valid atau tidak ditemukan."
+                detail="Data penyakit tidak valid atau tidak ditemukan.",
             )
-        required_fields = ["name", "plants_listed", "type", "symptoms", "preventions", "causes", "treatments", "recovery_care"]
-        missing_fields = [field for field in required_fields if field not in disease_data]
-        if missing_fields:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Data penyakit tidak lengkap. Field yang hilang: {', '.join(missing_fields)}"
-            )
-        return Diseases(**disease_data)
-
-    except HTTPException as http_exc:
-        raise http_exc
-
+        category_ref = disease_data.get("category_ref")
+        response_data = {
+            **disease_data,
+            "id": disease_doc.id,
+            "category": {
+                "id": category_ref.id if category_ref else "unknown",
+                "name": disease_data.get("category_name", "Tidak ada kategori"),
+                "description": None,
+            },
+        }
+        return DiseaseResponse(**response_data)
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch(
@@ -155,29 +182,47 @@ def get_disease_by_id(disease_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def update_disease(disease_id: str, updated_disease: Diseases):
+def update_disease(disease_id: str, updated_disease: DiseaseResponse):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
-        disease_doc = disease_ref.get()
+        if not disease_ref.get().exists:
+            raise HTTPException(status_code=404, detail="Penyakit tidak ditemukan.")
 
-        if not disease_doc.exists:
+        update_data = updated_disease.model_dump(exclude_unset=True)
+        if not update_data:
             raise HTTPException(
-                status_code=404,
-                detail=f"penyakit dengan nama {disease_id} tidak ditemukan",
+                status_code=400, detail="Tidak ada data untuk diperbarui."
             )
 
-        disease_ref.update(updated_disease.model_dump(exclude_unset=True))
+        if "category_id" in update_data:
+            category_id = update_data.pop("category_id")
+            category_ref = db.collection(
+                FIRESTORE_COLLECTION_DISEASE_CATEGORIES
+            ).document(category_id)
+            category_doc = category_ref.get()
+            if not category_doc.exists:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Kategori dengan ID '{category_id}' tidak ditemukan.",
+                )
 
-        return {"message": "Penyakit berhasil diperbarui"}
+            category_data = category_doc.to_dict()
 
-    except HTTPException as http_exc:
-        raise http_exc
+            if not category_data:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Ketegori dengan ID '{category_id}' tidak ada atau corrupt",
+                )
 
+            update_data["category_ref"] = category_ref
+            update_data["category_name"] = category_data.get("name")
+
+        disease_ref.update(update_data)
+        return SuccessResponse(message="Penyakit berhasil diperbarui")
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Terjadi kesalahan saat memperbarui data penyakit: {str(e)}",
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.delete(

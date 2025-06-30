@@ -1,5 +1,7 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+from schemas.disease_categories import DiseaseCategoryResponse
 
 
 class RecoveryStep(BaseModel):
@@ -32,7 +34,7 @@ class Symptoms(BaseModel):
     items: List[str]
 
 
-class Diseases(BaseModel):
+class DiseaseBase(BaseModel):
     name: str
     plants_listed: List[str]
     type: str
@@ -43,7 +45,30 @@ class Diseases(BaseModel):
     recovery_care: List[RecoveryCare]
 
 
+class DiseaseCreate(DiseaseBase):
+    category_id: str = Field(
+        ..., description="ID/slug dari kategori penyakit, contoh: 'penyakit-jamur'"
+    )
+
+
+class DiseaseUpdate(BaseModel):
+    name: Optional[str] = None
+    plants_listed: Optional[List[str]] = None
+    type: Optional[str] = None
+    symptoms: Optional[Symptoms] = None
+    preventions: Optional[Preventions] = None
+    causes: Optional[Causes] = None
+    treatments: Optional[Treatments] = None
+    recovery_care: Optional[RecoveryCare] = None
+    category_id: Optional[str] = None
+
+
+class DiseaseResponse(DiseaseBase):
+    id: str
+    category: DiseaseCategoryResponse
+
+
 class DiseasesPaginatedResponse(BaseModel):
-    diseases: list[Diseases]
+    diseases: list[DiseaseResponse]
     total_items: int
     max_page: int
