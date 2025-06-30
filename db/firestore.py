@@ -7,7 +7,9 @@ import os
 
 load_dotenv()
 
-cred = credentials.Certificate(os.getenv('GOOGLE_CREDENTIALS_JSON_PATH', 'path/to/your/serviceAccountKey.json'))
+path = os.getenv('GOOGLE_CREDENTIALS_JSON_PATH', 'path/to/your/serviceAccountKey.json')
+
+cred = credentials.Certificate(path)
 
 app = firebase_admin.initialize_app(cred)
 

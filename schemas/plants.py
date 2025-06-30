@@ -1,5 +1,8 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+
+from schemas.plant_categories import PlantCategoryResponse
 
 
 class FAQ(BaseModel):
@@ -37,17 +40,39 @@ class GrowInformation(BaseModel):
     life_expectacy: str
 
 
-class Plants(BaseModel):
+class PlantBase(BaseModel):
     name: str
     latin_name: str
     description: str
     faq: List[FAQ]
     characteristics: Characteristics
-    grow_infromation: GrowInformation
+    grow_information: GrowInformation
     use: List[str]
 
 
+class PlantCreate(PlantBase):
+    category_id: str = Field(
+        ..., description="ID/slug dari kategori tanaman, contoh: 'tanaman-obat'"
+    )
+
+
+class PlantUpdate(BaseModel):
+    name: Optional[str] = None
+    latin_name: Optional[str] = None
+    description: Optional[str] = None
+    faq: Optional[List[FAQ]] = None
+    characteristics: Optional[Characteristics] = None
+    grow_infromation: Optional[GrowInformation] = None
+    use: Optional[List[str]] = None
+    category_id: Optional[str] = None
+
+
+class PlantResponse(PlantBase):
+    id: str
+    category: PlantCategoryResponse
+
+
 class PlantsPaginatedResponse(BaseModel):
-    plants: list[Plants]
+    plants: list[PlantResponse]
     total_items: int
     max_page: int

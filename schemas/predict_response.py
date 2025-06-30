@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional
 
-from schemas.plants import Plants
+from schemas.plants import PlantResponse
 from schemas.diseases import Diseases
 
 class PredictResponse(BaseModel):
@@ -11,5 +11,5 @@ class PredictResponse(BaseModel):
     confidence: str
 
 class PlantDetail(BaseModel):
-    plant_data : Plants
+    plant_data : PlantResponse
     disease_data: Optional[Diseases] = None

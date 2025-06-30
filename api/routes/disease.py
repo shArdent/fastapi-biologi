@@ -87,12 +87,13 @@ def get_all_diseases(
             diseases.append(Diseases(**disease_data))
 
         meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
-        if not meta_doc.exists or "total_items" not in meta_doc.to_dict():
+        meta_doc_dict = meta_doc.to_dict()
+        if not meta_doc.exists or not meta_doc_dict or "total_items" not in meta_doc_dict:
             raise HTTPException(
                 status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
             )
 
-        total_items = meta_doc.to_dict()["total_items"]
+        total_items = meta_doc_dict["total_items"]
         max_page = (total_items + limit - 1) // limit
 
         return DiseasesPaginatedResponse(
@@ -124,7 +125,20 @@ def get_disease_by_id(disease_id: str):
                 detail=f"Penyakit dengan nama {disease_id} tidak ditemukan",
             )
 
-        return Diseases(**disease_doc.to_dict())
+        disease_data = disease_doc.to_dict()
+        if not disease_data or not isinstance(disease_data, dict):
+            raise HTTPException(
+                status_code=500,
+                detail="Data penyakit tidak valid atau tidak ditemukan."
+            )
+        required_fields = ["name", "plants_listed", "type", "symptoms", "preventions", "causes", "treatments", "recovery_care"]
+        missing_fields = [field for field in required_fields if field not in disease_data]
+        if missing_fields:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Data penyakit tidak lengkap. Field yang hilang: {', '.join(missing_fields)}"
+            )
+        return Diseases(**disease_data)
 
     except HTTPException as http_exc:
         raise http_exc

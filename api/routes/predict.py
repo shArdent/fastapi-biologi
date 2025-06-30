@@ -11,7 +11,7 @@ from constants.labels import class_names, plant_translate
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.preprocess_image import preprocess_image
 from schemas.predict_response import PredictResponse, PlantDetail
-from schemas.plants import Plants
+from schemas.plants import PlantResponse
 from schemas.diseases import Diseases
 from db.firestore import db
 from constants.collection_name import (
@@ -83,7 +83,7 @@ def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
                 status_code=500,
                 detail=f"Data tanaman dengan ID '{plant_id}' tidak valid",
             )
-        plant = Plants(**plant_data)
+        plant = PlantResponse(**plant_data)
 
         disease = None
         if disease_id:
