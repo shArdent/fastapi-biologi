@@ -1,5 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from google.cloud.firestore_v1 import Increment, field_path
+from google.cloud.firestore_v1 import (
+    DocumentReference,
+    FieldFilter,
+    Increment,
+    field_path,
+)
 from typing import Optional
 
 from db.firestore import db
@@ -27,6 +32,9 @@ def add_new_disease(new_disease: DiseaseCreate):
     try:
         disease_id = slugify(new_disease.name)
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
+        category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+            new_disease.category_id
+        )
 
         if disease_ref.get().exists:
             raise HTTPException(
@@ -34,7 +42,6 @@ def add_new_disease(new_disease: DiseaseCreate):
                 detail=f"Penyakit dengan nama '{new_disease.name}' sudah ada.",
             )
 
-        # === LOGIKA BARU UNTUK KATEGORI ===
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             new_disease.category_id
         )
@@ -65,6 +72,7 @@ def add_new_disease(new_disease: DiseaseCreate):
             FIRESTORE_DOCUMENT_METADATA
         )
         meta_ref.set({"total_items": Increment(1)}, merge=True)
+        category_ref.set({"disease_count": Increment(1)}, merge=True)
 
         return SuccessResponse(message="Penyakit berhasil ditambahkan")
     except HTTPException as he:
@@ -85,20 +93,55 @@ def get_all_diseases(
     start_after_doc_id: Optional[str] = Query(
         None, description="ID dokumen terakhir dari halaman sebelumnya"
     ),
+    category_id: Optional[str] = Query(
+        None, description="Filter penyakit berdasarkan ID Kategori"
+    ),
 ):
     try:
         diseases_ref = db.collection(FIRESTORE_COLLECTION_DISEASES)
-        query = diseases_ref.order_by(field_path.FieldPath.document_id())
+        base_query = diseases_ref
+        total_items = 0
+
+        if category_id:
+            category_ref = db.collection(
+                FIRESTORE_COLLECTION_DISEASE_CATEGORIES
+            ).document(category_id)
+            category_doc = category_ref.get()
+            category_data = category_doc.to_dict()
+            if (
+                category_doc.exists
+                and category_data
+                and "disease_count" in category_data
+            ):
+                total_items = category_data["disease_count"]
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
+                )
+            base_query = base_query.where(
+                filter=FieldFilter("category_ref", "==", category_ref)
+            )
+        else:
+            meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
+            meta_data = meta_doc.to_dict()
+            if meta_doc.exists and meta_data and "total_items" in meta_data:
+                total_items = meta_data["total_items"]
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
+                )
+
+        query_for_page = base_query.order_by(field_path.FieldPath.document_id())
 
         if start_after_doc_id:
-            start_doc = diseases_ref.document(start_after_doc_id).get()
-            if not start_doc.exists:
+            start_doc_ref = diseases_ref.document(start_after_doc_id).get()
+            if not start_doc_ref.exists:
                 raise HTTPException(
                     status_code=404, detail="Dokumen awal tidak ditemukan."
                 )
-            query = query.start_after(start_doc)
+            query_for_page = query_for_page.start_after(start_doc_ref)
 
-        docs = query.limit(limit).stream()
+        docs = query_for_page.limit(limit).stream()
         diseases = []
         for doc in docs:
             if doc.id == FIRESTORE_DOCUMENT_METADATA:
@@ -109,27 +152,24 @@ def get_all_diseases(
                 continue
 
             category_ref = disease_data.get("category_ref")
+
+            cat_id = "unknown"
+
+            if isinstance(category_ref, DocumentReference):
+                cat_id = category_ref.id
+
             response_data = {
                 **disease_data,
                 "id": doc.id,
                 "category": {
-                    "id": category_ref.id if category_ref else "unknown",
+                    "id": cat_id,
                     "name": disease_data.get("category_name", "Tidak ada kategori"),
                     "description": None,
                 },
             }
             diseases.append(DiseaseResponse(**response_data))
 
-        meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
-        meta_data = meta_doc.to_dict() if meta_doc.exists else {}
-
-        if not meta_data:
-            raise HTTPException(
-                status_code=500,
-                detail="meta data kosong atau korup.",
-            )
-        total_items = meta_data.get("total_items", 0)
-        max_page = (total_items + limit - 1) // limit
+        max_page = (total_items + limit - 1) // limit if limit > 0 else 0
 
         return DiseasesPaginatedResponse(
             diseases=diseases, total_items=total_items, max_page=max_page
@@ -241,12 +281,17 @@ def delete_disease(disease_id: str):
                 detail=f"Penyakit dengan nama {disease_id} tidak ditemukan",
             )
 
-        disease_ref.delete()
+        disease_data = disease_doc.to_dict()
 
+        category_ref = disease_doc.get("category_ref") if disease_data else None
+
+        disease_ref.delete()
         meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
             FIRESTORE_DOCUMENT_METADATA
         )
         meta_ref.update({"total_items": Increment(-1)})
+        if category_ref:
+            category_ref.update({"disease_count": Increment(-1)})
 
         return SuccessResponse(message="Penyakit berhasil dihapus")
 
