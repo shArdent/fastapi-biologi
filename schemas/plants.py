@@ -5,11 +5,6 @@ from typing import List, Optional
 from schemas.plant_categories import PlantCategoryResponse
 
 
-class FAQ(BaseModel):
-    question: str
-    answer: str
-
-
 class Characteristics(BaseModel):
     max_height: str
     leaf_color: List[str]
@@ -44,7 +39,6 @@ class PlantBase(BaseModel):
     name: str
     latin_name: str
     description: str
-    faq: List[FAQ]
     characteristics: Characteristics
     grow_information: GrowInformation
     use: List[str]
@@ -60,9 +54,8 @@ class PlantUpdate(BaseModel):
     name: Optional[str] = None
     latin_name: Optional[str] = None
     description: Optional[str] = None
-    faq: Optional[List[FAQ]] = None
     characteristics: Optional[Characteristics] = None
-    grow_infromation: Optional[GrowInformation] = None
+    grow_information: Optional[GrowInformation] = None
     use: Optional[List[str]] = None
     category_id: Optional[str] = None
 

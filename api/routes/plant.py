@@ -1,5 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from google.cloud.firestore_v1 import Increment, field_path
+from google.cloud.firestore_v1 import (
+    DocumentReference,
+    Increment,
+    field_path,
+    FieldFilter,
+)
 from typing import Optional
 
 from db.firestore import db
@@ -26,12 +31,15 @@ router = APIRouter(prefix="/plants", tags=["plants"])
     "/",
     response_model=SuccessResponse,
     status_code=201,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def add_new_plant(new_plant: PlantCreate):
     try:
         plant_id = slugify(new_plant.name)
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
+        category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
+            new_plant.category_id
+        )
 
         if plant_ref.get().exists:
             raise HTTPException(
@@ -39,9 +47,6 @@ def add_new_plant(new_plant: PlantCreate):
                 detail=f"Tanaman dengan nama '{new_plant.name}' sudah ada.",
             )
 
-        category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
-            new_plant.category_id
-        )
         category_doc = category_ref.get()
         if not category_doc.exists:
             raise HTTPException(
@@ -70,6 +75,7 @@ def add_new_plant(new_plant: PlantCreate):
             FIRESTORE_DOCUMENT_METADATA
         )
         meta_ref.set({"total_items": Increment(1)}, merge=True)
+        category_ref.set({"plant_count": Increment(1)}, merge=True)
 
         return SuccessResponse(message="Tanaman berhasil ditambahkan")
     except HTTPException as he:
@@ -90,10 +96,41 @@ def get_all_plants(
     start_after_doc_id: Optional[str] = Query(
         None, description="ID dokumen terakhir dari halaman sebelumnya"
     ),
+    category_id: Optional[str] = Query(
+        None, description="Filter tanaman berdasarkan ID Kategori"
+    ),
 ):
     try:
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
-        query = plants_ref.order_by(field_path.FieldPath.document_id())
+        base_query = plants_ref
+        total_items = 0
+
+        if category_id:
+            category_ref = db.collection(
+                FIRESTORE_COLLECTION_PLANT_CATEGORIES
+            ).document(category_id)
+            category_doc = category_ref.get()
+            category_data = category_doc.to_dict()
+            if category_doc.exists and category_data and "plant_count" in category_data:
+                total_items = category_data["plant_count"]
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Metadata jumlah tanaman tidak tersedia."
+                )
+            base_query = base_query.where(
+                filter=FieldFilter("category_ref", "==", category_ref)
+            )
+        else:
+            meta_doc = plants_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
+            meta_data = meta_doc.to_dict()
+            if meta_doc.exists and meta_data and "total_items" in meta_data:
+                total_items = meta_data["total_items"]
+            else:
+                raise HTTPException(
+                    status_code=500, detail="Metadata jumlah tanaman tidak tersedia."
+                )
+
+        query_for_page = base_query.order_by(field_path.FieldPath.document_id())
 
         if start_after_doc_id:
             start_doc_ref = plants_ref.document(start_after_doc_id).get()
@@ -102,9 +139,9 @@ def get_all_plants(
                     status_code=404,
                     detail=f"Dokumen dengan ID '{start_after_doc_id}' tidak ditemukan.",
                 )
-            query = query.start_after(start_doc_ref)
+            query_for_page = query_for_page.start_after(start_doc_ref)
 
-        docs = query.limit(limit).stream()
+        docs = query_for_page.limit(limit).stream()
 
         plants = []
         for doc in docs:
@@ -116,11 +153,16 @@ def get_all_plants(
                 continue
 
             category_ref = plant_data.get("category_ref")
+
+            cat_id = "unknown"
+            if isinstance(category_ref, DocumentReference):
+                cat_id = category_ref.id
+
             response_data = {
                 **plant_data,
                 "id": doc.id,
                 "category": {
-                    "id": category_ref.id if category_ref else "unknown",
+                    "id": cat_id,
                     "name": plant_data.get("category_name", "Tidak ada kategori"),
                     "description": None,
                 },
@@ -128,19 +170,7 @@ def get_all_plants(
 
             plants.append(PlantResponse(**response_data))
 
-        meta_doc = plants_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
-        meta_doc_dict = meta_doc.to_dict()
-        if (
-            not meta_doc.exists
-            or not meta_doc_dict
-            or "total_items" not in meta_doc_dict
-        ):
-            raise HTTPException(
-                status_code=500, detail="Metadata jumlah tanaman tidak tersedia."
-            )
-
-        total_items = meta_doc_dict["total_items"]
-        max_page = (total_items + limit - 1) // limit
+        max_page = (total_items + limit - 1) // limit if limit > 0 else 0
 
         return PlantsPaginatedResponse(
             plants=plants, total_items=total_items, max_page=max_page
@@ -250,13 +280,19 @@ def delete_plant(plant_id: str):
                 detail=f"Tanaman dengan nama {plant_id} tidak ditemukan",
             )
 
+        plant_data = plant_doc.to_dict()
+        category_ref = plant_data.get("category_ref") if plant_data else None
+
         plant_ref.delete()
         meta_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
             FIRESTORE_DOCUMENT_METADATA
         )
         meta_ref.update({"total_items": Increment(-1)})
 
-        return {"message": "Tanaman berhasil dihapus"}
+        if category_ref:
+            category_ref.update({"plant_count": Increment(-1)})
+
+        return SuccessResponse(message="Tanaman berhasil dihapus")
 
     except HTTPException as he:
         raise he

@@ -21,7 +21,7 @@ router = APIRouter(prefix="/plant-categories", tags=["Plant Categories"])
     "/",
     response_model=SuccessResponse,
     status_code=status.HTTP_201_CREATED,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def add_plant_category(category_data: PlantCategoryCreate):
     try:
@@ -48,7 +48,7 @@ def add_plant_category(category_data: PlantCategoryCreate):
 @router.get(
     "/",
     response_model=List[PlantCategoryResponse],
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 def get_all_plant_categories():
     try:
@@ -66,7 +66,7 @@ def get_all_plant_categories():
 @router.get(
     "/{category_id}",
     response_model=PlantCategoryResponse,
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 def get_plant_category_by_id(category_id: str):
     try:
@@ -97,10 +97,9 @@ def get_plant_category_by_id(category_id: str):
 @router.patch(
     "/{category_id}",
     response_model=SuccessResponse,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def update_plant_category(category_id: str, category_update: PlantCategoryUpdate):
-    """Memperbarui data kategori tanaman."""
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
             category_id
@@ -128,10 +127,9 @@ def update_plant_category(category_id: str, category_update: PlantCategoryUpdate
 @router.delete(
     "/{category_id}",
     response_model=SuccessResponse,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def delete_plant_category(category_id: str):
-    """Menghapus kategori tanaman."""
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
             category_id

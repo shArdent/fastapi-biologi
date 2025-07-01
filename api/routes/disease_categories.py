@@ -9,6 +9,7 @@ from schemas.disease_categories import (
     DiseaseCategoryUpdate,
 )
 from utils.middlewares.verify_is_admin import verify_is_admin
+from utils.middlewares.verify_token import verify_firebase_token
 from utils.slugify import slugify
 from db.firestore import db
 
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/disease-categories", tags=["Disease Categories"])
     "/",
     response_model=SuccessResponse,
     status_code=status.HTTP_201_CREATED,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def add_disease_category(category_data: DiseaseCategoryCreate):
     try:
@@ -46,7 +47,7 @@ def add_disease_category(category_data: DiseaseCategoryCreate):
 @router.get(
     "/",
     response_model=List[DiseaseCategoryResponse],
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 def get_all_disease_categories():
     try:
@@ -64,7 +65,7 @@ def get_all_disease_categories():
 @router.get(
     "/{category_id}",
     response_model=DiseaseCategoryResponse,
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 def get_disease_category_by_id(category_id: str):
     try:
@@ -95,7 +96,7 @@ def get_disease_category_by_id(category_id: str):
 @router.patch(
     "/{category_id}",
     response_model=SuccessResponse,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def update_disease_category(category_id: str, category_update: DiseaseCategoryUpdate):
     try:
@@ -124,7 +125,7 @@ def update_disease_category(category_id: str, category_update: DiseaseCategoryUp
 @router.delete(
     "/{category_id}",
     response_model=SuccessResponse,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def delete_disease_category(category_id: str):
     try:

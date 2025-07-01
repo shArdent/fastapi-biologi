@@ -21,7 +21,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     "/",
     response_model=SuccessResponse,
     status_code=201,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 def add_new_disease(new_disease: DiseaseCreate):
     try:

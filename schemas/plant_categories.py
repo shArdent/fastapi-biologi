@@ -5,6 +5,11 @@ from pydantic import BaseModel, Field
 class PlantCategoryBase(BaseModel):
     name: str = Field(..., description="Nama kategori tanaman, contoh: Tanaman Obat")
     description: Optional[str] = Field(None, description="Deskripsi singkat kategori")
+    plant_count: int = Field(
+        0,
+        description="Jumlah tanaman dalam kategori ini (dikelola otomatis).",
+        ge=0,
+    )
 
 
 class PlantCategoryCreate(PlantCategoryBase):
