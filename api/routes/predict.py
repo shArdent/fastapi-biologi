@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException
 from PIL import Image
 from fastapi.responses import JSONResponse
 from typing import Optional
@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 import tensorflow as tf
 
 from constants.labels import class_names, plant_translate
+from utils.get_category_data import get_category_data
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.preprocess_image import preprocess_image
 from schemas.predict_response import PredictResponse, PlantDetail
@@ -67,7 +68,12 @@ async def predict(file: UploadFile = File(...)):
 @router.get(
     "/detail", response_model=PlantDetail, dependencies=[Depends(verify_firebase_token)]
 )
-def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
+def get_plant_and_disease_detail(
+    plant_id: str,
+    disease_id: Optional[str] = Query(
+        None, description="Filter tanaman berdasarkan ID Kategori"
+    ),
+):
     try:
         plant_doc = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id).get()
         if not plant_doc.exists:
@@ -83,19 +89,14 @@ def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
                 detail=f"Data tanaman dengan ID '{plant_id}' tidak valid",
             )
 
-        category_data = {"id": None, "name": "None", "description": "None"}
         plant_cat_ref = plant_data.get("category_ref")
-        if isinstance(plant_cat_ref, DocumentReference):
-            cat_doc = plant_cat_ref.get()
-            if cat_doc.exists:
-                cat_dict = cat_doc.to_dict() or {}
-                category_data = {
-                    "id": cat_doc.id,
-                    "name": cat_dict.get("name", "None"),
-                    "description": cat_dict.get("description", "None"),
-                }
+        p_category_data = (
+            get_category_data(plant_cat_ref)
+            if isinstance(plant_cat_ref, DocumentReference)
+            else {"id": None, "name": "None", "description": "None"}
+        )
 
-        plant_response = {**plant_data, "id": plant_doc.id, "category": category_data}
+        plant_response = {**plant_data, "id": plant_doc.id, "category": p_category_data}
         plant = PlantResponse(**plant_response)
 
         disease = None
@@ -116,22 +117,17 @@ def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
                     detail=f"Data penyakit dengan ID '{disease_id}' tidak valid",
                 )
 
-            disease_cat_data = {"id": None, "name": "None", "description": "None"}
             disease_cat_ref = disease_data.get("category_ref")
-            if isinstance(disease_cat_ref, DocumentReference):
-                d_cat_doc = disease_cat_ref.get()
-                if d_cat_doc.exists:
-                    d_cat_dict = d_cat_doc.to_dict() or {}
-                    disease_cat_data = {
-                        "id": d_cat_doc.id,
-                        "name": d_cat_dict.get("name", "None"),
-                        "description": d_cat_dict.get("description", "None"),
-                    }
+            d_category_data = (
+                get_category_data(disease_cat_ref)
+                if isinstance(disease_cat_ref, DocumentReference)
+                else {"id": None, "name": "None", "description": "None"}
+            )
 
             disease_response = {
                 **disease_data,
                 "id": disease_doc.id,
-                "category": disease_cat_data,
+                "category": d_category_data,
             }
             disease = DiseaseResponse(**disease_response)
 
