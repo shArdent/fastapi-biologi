@@ -15,6 +15,7 @@ from constants.collection_name import (
 )
 from schemas.diseases import DiseaseCreate, DiseaseResponse, DiseasesPaginatedResponse
 from schemas.default_success import SuccessResponse
+from utils.get_category_data import get_category_data
 from utils.middlewares.verify_is_admin import verify_is_admin
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.slugify import slugify
@@ -152,21 +153,13 @@ def get_all_diseases(
                 continue
 
             category_ref = disease_data.get("category_ref")
+            category_data = (
+                get_category_data(category_ref)
+                if isinstance(category_ref, DocumentReference)
+                else {"id": None, "name": "None", "description": "None"}
+            )
 
-            cat_id = "unknown"
-
-            if isinstance(category_ref, DocumentReference):
-                cat_id = category_ref.id
-
-            response_data = {
-                **disease_data,
-                "id": doc.id,
-                "category": {
-                    "id": cat_id,
-                    "name": disease_data.get("category_name", "Tidak ada kategori"),
-                    "description": None,
-                },
-            }
+            response_data = {**disease_data, "id": doc.id, "category": category_data}
             diseases.append(DiseaseResponse(**response_data))
 
         max_page = (total_items + limit - 1) // limit if limit > 0 else 0
