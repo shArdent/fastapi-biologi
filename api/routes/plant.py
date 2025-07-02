@@ -105,14 +105,18 @@ def get_all_plants(
         base_query = plants_ref
         total_items = 0
 
+        category_response = {}
+
         if category_id:
             category_ref = db.collection(
                 FIRESTORE_COLLECTION_PLANT_CATEGORIES
             ).document(category_id)
             category_doc = category_ref.get()
             category_data = category_doc.to_dict()
+
             if category_doc.exists and category_data and "plant_count" in category_data:
                 total_items = category_data["plant_count"]
+
             else:
                 raise HTTPException(
                     status_code=500, detail="Metadata jumlah tanaman tidak tersedia."
@@ -154,19 +158,18 @@ def get_all_plants(
 
             category_ref = plant_data.get("category_ref")
 
-            cat_id = "unknown"
             if isinstance(category_ref, DocumentReference):
-                cat_id = category_ref.id
+                cat_doc = category_ref.get()
+                cat_data = cat_doc.to_dict()
+                category_response["id"] = cat_doc.id
+                category_response["name"] = (
+                    cat_data.get("name") if cat_data is not None else "None"
+                )
+                category_response["description"] = (
+                    cat_data.get("description") if cat_data is not None else "None"
+                )
 
-            response_data = {
-                **plant_data,
-                "id": doc.id,
-                "category": {
-                    "id": cat_id,
-                    "name": plant_data.get("category_name", "Tidak ada kategori"),
-                    "description": None,
-                },
-            }
+            response_data = {**plant_data, "id": doc.id, "category": category_response}
 
             plants.append(PlantResponse(**response_data))
 

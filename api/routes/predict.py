@@ -3,6 +3,7 @@ from PIL import Image
 from fastapi.responses import JSONResponse
 from typing import Optional
 import io
+from google.cloud.firestore_v1 import DocumentReference
 import numpy as np
 from starlette.concurrency import run_in_threadpool
 import tensorflow as tf
@@ -68,50 +69,76 @@ async def predict(file: UploadFile = File(...)):
 )
 def get_plant_and_disease_detail(plant_id: str, disease_id: Optional[str]):
     try:
-        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
-        plant_doc = plant_ref.get()
-
+        plant_doc = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id).get()
         if not plant_doc.exists:
             raise HTTPException(
                 status_code=404,
                 detail=f"Tanaman dengan ID '{plant_id}' tidak ditemukan",
             )
 
-        plant_data = plant_doc.to_dict()
+        plant_data = plant_doc.to_dict() or {}
         if not plant_data:
             raise HTTPException(
                 status_code=500,
                 detail=f"Data tanaman dengan ID '{plant_id}' tidak valid",
             )
-        plant = PlantResponse(**plant_data)
+
+        category_data = {"id": None, "name": "None", "description": "None"}
+        plant_cat_ref = plant_data.get("category_ref")
+        if isinstance(plant_cat_ref, DocumentReference):
+            cat_doc = plant_cat_ref.get()
+            if cat_doc.exists:
+                cat_dict = cat_doc.to_dict() or {}
+                category_data = {
+                    "id": cat_doc.id,
+                    "name": cat_dict.get("name", "None"),
+                    "description": cat_dict.get("description", "None"),
+                }
+
+        plant_response = {**plant_data, "id": plant_doc.id, "category": category_data}
+        plant = PlantResponse(**plant_response)
 
         disease = None
         if disease_id:
-            disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
-                disease_id
+            disease_doc = (
+                db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id).get()
             )
-            disease_doc = disease_ref.get()
-
             if not disease_doc.exists:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Penyakit dengan ID '{disease_id}' tidak ditemukan",
                 )
 
-            disease_data = disease_doc.to_dict()
+            disease_data = disease_doc.to_dict() or {}
             if not disease_data:
                 raise HTTPException(
                     status_code=500,
                     detail=f"Data penyakit dengan ID '{disease_id}' tidak valid",
                 )
 
-            disease = DiseaseResponse(**disease_data)
+            disease_cat_data = {"id": None, "name": "None", "description": "None"}
+            disease_cat_ref = disease_data.get("category_ref")
+            if isinstance(disease_cat_ref, DocumentReference):
+                d_cat_doc = disease_cat_ref.get()
+                if d_cat_doc.exists:
+                    d_cat_dict = d_cat_doc.to_dict() or {}
+                    disease_cat_data = {
+                        "id": d_cat_doc.id,
+                        "name": d_cat_dict.get("name", "None"),
+                        "description": d_cat_dict.get("description", "None"),
+                    }
+
+            disease_response = {
+                **disease_data,
+                "id": disease_doc.id,
+                "category": disease_cat_data,
+            }
+            disease = DiseaseResponse(**disease_response)
 
         return PlantDetail(plant_data=plant, disease_data=disease)
 
-    except HTTPException as he:
-        raise he
-
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Terjadi kesalahan saat mengambil detail: {str(e)}"
