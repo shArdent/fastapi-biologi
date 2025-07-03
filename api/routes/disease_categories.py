@@ -23,20 +23,20 @@ router = APIRouter(prefix="/disease-categories", tags=["Disease Categories"])
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(verify_is_admin)],
 )
-def add_disease_category(category_data: DiseaseCategoryCreate):
+async def add_disease_category(category_data: DiseaseCategoryCreate):
     try:
         category_id = slugify(category_data.name)
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             category_id
         )
 
-        if category_ref.get().exists:
+        if (await category_ref.get()).exists:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Kategori dengan nama '{category_data.name}' sudah ada.",
             )
 
-        category_ref.set(category_data.model_dump())
+        await category_ref.set(category_data.model_dump())
         return SuccessResponse(message="Kategori penyakit berhasil ditambahkan.")
     except HTTPException as he:
         raise he
@@ -49,12 +49,14 @@ def add_disease_category(category_data: DiseaseCategoryCreate):
     response_model=List[DiseaseCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_all_disease_categories():
+async def get_all_disease_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).stream()
         categories = []
-        for doc in docs:
+        async for doc in docs:
             category_data = doc.to_dict()
+            if not category_data:
+                continue
             category_data["id"] = doc.id
             categories.append(DiseaseCategoryResponse(**category_data))
         return categories
@@ -67,9 +69,9 @@ def get_all_disease_categories():
     response_model=DiseaseCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_disease_category_by_id(category_id: str):
+async def get_disease_category_by_id(category_id: str):
     try:
-        doc = (
+        doc = await (
             db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES)
             .document(category_id)
             .get()
@@ -98,12 +100,12 @@ def get_disease_category_by_id(category_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def update_disease_category(category_id: str, category_update: DiseaseCategoryUpdate):
+async def update_disease_category(category_id: str, category_update: DiseaseCategoryUpdate):
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             category_id
         )
-        if not category_ref.get().exists:
+        if not (await category_ref.get()).exists:
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
         update_data = category_update.model_dump(exclude_unset=True)
@@ -113,7 +115,7 @@ def update_disease_category(category_id: str, category_update: DiseaseCategoryUp
                 status_code=400, detail="Tidak ada data untuk diperbarui."
             )
 
-        category_ref.update(update_data)
+        await category_ref.update(update_data)
 
         return SuccessResponse(message="Kategori penyakit berhasil diperbarui.")
     except HTTPException as he:
@@ -127,15 +129,15 @@ def update_disease_category(category_id: str, category_update: DiseaseCategoryUp
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def delete_disease_category(category_id: str):
+async def delete_disease_category(category_id: str):
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             category_id
         )
-        if not category_ref.get().exists:
+        if not (await category_ref.get()).exists:
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
-        category_ref.delete()
+        await category_ref.delete()
         return SuccessResponse(message="Kategori penyakit berhasil dihapus.")
     except HTTPException as he:
         raise he

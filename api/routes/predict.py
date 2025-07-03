@@ -68,14 +68,16 @@ async def predict(file: UploadFile = File(...)):
 @router.get(
     "/detail", response_model=PlantDetail, dependencies=[Depends(verify_firebase_token)]
 )
-def get_plant_and_disease_detail(
+async def get_plant_and_disease_detail(
     plant_id: str,
     disease_id: Optional[str] = Query(
         None, description="Filter tanaman berdasarkan ID Kategori"
     ),
 ):
     try:
-        plant_doc = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id).get()
+        plant_doc = (
+            await db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id).get()
+        )
         if not plant_doc.exists:
             raise HTTPException(
                 status_code=404,
@@ -101,7 +103,7 @@ def get_plant_and_disease_detail(
 
         disease = None
         if disease_id:
-            disease_doc = (
+            disease_doc = await (
                 db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id).get()
             )
             if not disease_doc.exists:

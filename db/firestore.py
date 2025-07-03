@@ -1,10 +1,10 @@
 import json
-import firebase_admin
-from firebase_admin import credentials
-from firebase_admin import firestore
 from dotenv import load_dotenv
 
 import os
+
+from google.cloud.firestore_v1.async_client import AsyncClient
+from google.oauth2 import service_account
 
 load_dotenv()
 
@@ -16,8 +16,6 @@ if cred_json is None:
 cred_dict = json.loads(cred_json)
 
 
-cred = credentials.Certificate(cred_dict)
+creds = service_account.Credentials.from_service_account_info(cred_dict)
 
-app = firebase_admin.initialize_app(cred)
-
-db = firestore.client()
+db = AsyncClient(credentials=creds, project=cred_dict["project_id"])

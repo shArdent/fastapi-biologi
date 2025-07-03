@@ -34,7 +34,7 @@ router = APIRouter(prefix="/my-plants", tags=["my plants"])
     response_model=SuccessCreatePlant,
     status_code=status.HTTP_201_CREATED,
 )
-def add_my_plant(
+async def add_my_plant(
     user_id: str, plant_data: MyPlantCreate, _: dict = Depends(verify_user_id_match)
 ):
     try:
@@ -47,7 +47,7 @@ def add_my_plant(
             plant_data.plant_id
         )
 
-        if not plant_ref.get().exists:
+        if not (await plant_ref.get()).exists:
             raise HTTPException(
                 status_code=404,
                 detail=f"Tanaman dengan ID '{plant_data.plant_id}' tidak ditemukan.",
@@ -64,7 +64,7 @@ def add_my_plant(
             disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
                 plant_data.disease_id
             )
-            if not disease_ref.get().exists:
+            if not (await disease_ref.get()).exists:
                 raise HTTPException(
                     status_code=404,
                     detail=f"Penyakit dengan ID '{plant_data.disease_id}' tidak ditemukan.",
@@ -173,7 +173,7 @@ def get_all_my_plants(
     status_code=status.HTTP_200_OK,
     response_model=SuccessUpdatePlant,
 )
-def update_my_plant(
+async def update_my_plant(
     user_id: str,
     my_plant_id: str,
     plant_update_data: MyPlantUpdate,
@@ -204,7 +204,7 @@ def update_my_plant(
             disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
                 plant_update_data.disease_id
             )
-            if not disease_ref.get().exists:
+            if not (await disease_ref.get()).exists:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Penyakit dengan ID '{plant_update_data.disease_id}' tidak ditemukan.",
