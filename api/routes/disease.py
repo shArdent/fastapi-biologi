@@ -1,7 +1,6 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud.firestore_v1 import (
-    AsyncDocumentReference,
     FieldFilter,
     Increment,
 )
@@ -17,7 +16,6 @@ from schemas.diseases import (
     DiseaseCreate,
     DiseaseResponse,
     DiseasesCursorResponse,
-    DiseasesPaginatedResponse,
 )
 from schemas.default_success import SuccessResponse
 from utils.middlewares.verify_is_admin import verify_is_admin
@@ -94,7 +92,7 @@ async def add_new_disease(new_disease: DiseaseCreate):
 
 @router.get(
     "/",
-    response_model=DiseasesPaginatedResponse,
+    response_model=DiseasesCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
 async def get_all_diseases(
@@ -135,47 +133,15 @@ async def get_all_diseases(
         if not diseases_docs:
             return DiseasesCursorResponse(diseases=[], next_cursor=None)
 
-        category_refs_to_fetch = {
-            ref
-            for doc in diseases_docs
-            if (data := doc.to_dict())
-            and (ref := data.get("category_ref"))
-            and isinstance(ref, AsyncDocumentReference)
-        }
-
-        categories_map = {}
-        if category_refs_to_fetch:
-            category_docs_stream = db.get_all(list(category_refs_to_fetch))
-            categories_map = {
-                doc.id: doc.to_dict()
-                async for doc in category_docs_stream
-                if doc.exists
-            }
-
-        # 8. Susun data respons
         diseases = []
         for doc in diseases_docs:
             disease_data = doc.to_dict()
             if not disease_data:
                 continue
 
-            category_ref = disease_data.get("category_ref")
-            category_data = {"id": None, "name": "None"}
-
-            if (
-                isinstance(category_ref, AsyncDocumentReference)
-                and category_ref.id in categories_map
-            ):
-                cat_raw = categories_map.get(category_ref.id)
-                category_data = {
-                    "id": category_ref.id,
-                    "name": cat_raw.get("name", "None") if cat_raw else "None",
-                }
-
-            response_data = {**disease_data, "id": doc.id, "category": category_data}
+            response_data = {**disease_data, "id": doc.id}
             diseases.append(DiseaseResponse(**response_data))
 
-        # 9. Tentukan kursor untuk halaman berikutnya
         next_cursor = diseases_docs[-1].id if len(diseases_docs) == limit else None
 
         return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor)
@@ -211,15 +177,9 @@ async def get_disease_by_id(disease_id: str):
                 status_code=500,
                 detail="Data penyakit tidak valid atau tidak ditemukan.",
             )
-        category_ref = disease_data.get("category_ref")
         response_data = {
             **disease_data,
             "id": disease_doc.id,
-            "category": {
-                "id": category_ref.id if category_ref else "unknown",
-                "name": disease_data.get("category_name", "Tidak ada kategori"),
-                "description": None,
-            },
         }
         return DiseaseResponse(**response_data)
     except HTTPException as he:
