@@ -2,9 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
-from schemas.plant_categories import PlantCategoryResponse
-
-
 class Characteristics(BaseModel):
     max_height: str
     leaf_color: List[str]
