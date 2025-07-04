@@ -90,7 +90,7 @@ async def add_new_plant(new_plant: PlantCreate):
 @router.get(
     "/",
     response_model=PlantsCursorResponse,
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 async def get_all_plants(
     limit: int = Query(10, ge=1, le=100),
