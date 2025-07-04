@@ -1,36 +1,71 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
-class FAQ(BaseModel):
-    question: str
-    answer: str
+
+from schemas.plant_categories import PlantCategoryResponse
+
 
 class Characteristics(BaseModel):
     max_height: str
-    max_spread: str
     leaf_color: List[str]
-    leaf_type: str
-    planting_time: List[str]
+    flower_color: List[str]
+    flower_size: str
+    leaf_shape: str
+    stem_type: str
+    root_type: str
 
-class Climate(BaseModel):
-    temperature: str
-    hardness: str
+
+class PlantToxicity(BaseModel):
+    humans: str
+    animals: str
 
 
-class CareConditions(BaseModel):
-    soil: List[str]
-    location: str
-    sunlight: str
-    climate: Climate
+class BasicInformation(BaseModel):
+    toxicity: PlantToxicity
+    potential_weeds: str
+    habitats: str
+    type: str
+    life_expectacy: str
 
-class Plants(BaseModel):
+
+class GrowInformation(BaseModel):
+    growing_time: str
+    harvest_season: str
+    harvest_time: str
+    life_expectacy: str
+
+
+class PlantBase(BaseModel):
     name: str
-    faq: List[FAQ]
-    distribution: List[str]
+    latin_name: str
+    description: str
     characteristics: Characteristics
-    care_conditions: CareConditions
-    use: str
-    adaptation_strategy: str
-    history: str
-    name_origin: str
-    symbolism: str
+    grow_information: GrowInformation
+    use: List[str]
+
+
+class PlantCreate(PlantBase):
+    category_id: str = Field(
+        ..., description="ID/slug dari kategori tanaman, contoh: 'tanaman-obat'"
+    )
+
+
+class PlantUpdate(BaseModel):
+    name: Optional[str] = None
+    latin_name: Optional[str] = None
+    description: Optional[str] = None
+    characteristics: Optional[Characteristics] = None
+    grow_information: Optional[GrowInformation] = None
+    use: Optional[List[str]] = None
+    category_id: Optional[str] = None
+
+
+class PlantResponse(PlantBase):
+    id: str
+    category: PlantCategoryResponse
+
+
+class PlantsPaginatedResponse(BaseModel):
+    plants: list[PlantResponse]
+    total_items: int
+    max_page: int

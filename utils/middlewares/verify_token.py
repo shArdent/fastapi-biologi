@@ -5,8 +5,9 @@ from firebase_admin import auth
 
 security = HTTPBearer(auto_error=True)
 
+
 def verify_firebase_token(
-    credentials: HTTPAuthorizationCredentials = Security(security)
+    credentials: HTTPAuthorizationCredentials = Security(security),
 ):
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
