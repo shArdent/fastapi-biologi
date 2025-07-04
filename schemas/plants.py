@@ -65,6 +65,11 @@ class PlantResponse(PlantBase):
     category: PlantCategoryResponse
 
 
+class PlantsCursorResponse(BaseModel):
+    plants: List[PlantResponse]
+    next_cursor: Optional[str]
+
+
 class PlantsPaginatedResponse(BaseModel):
     plants: list[PlantResponse]
     total_items: int

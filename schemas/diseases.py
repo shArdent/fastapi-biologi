@@ -67,6 +67,10 @@ class DiseaseResponse(DiseaseBase):
     id: str
     category: DiseaseCategoryResponse
 
+class DiseasesCursorResponse(BaseModel):
+    diseases: List[DiseaseResponse]
+    next_cursor: Optional[str]
+
 
 class DiseasesPaginatedResponse(BaseModel):
     diseases: list[DiseaseResponse]

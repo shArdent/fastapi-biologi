@@ -23,20 +23,20 @@ router = APIRouter(prefix="/plant-categories", tags=["Plant Categories"])
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(verify_is_admin)],
 )
-def add_plant_category(category_data: PlantCategoryCreate):
+async def add_plant_category(category_data: PlantCategoryCreate):
     try:
         category_id = slugify(category_data.name)
         category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
             category_id
         )
 
-        if category_ref.get().exists:
+        if (await category_ref.get()).exists:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Kategori dengan nama '{category_data.name}' sudah ada.",
             )
 
-        category_ref.set(category_data.model_dump())
+        await category_ref.set(category_data.model_dump())
         return SuccessResponse(message="Kategori tanaman berhasil ditambahkan.")
 
     except HTTPException as he:
@@ -50,12 +50,15 @@ def add_plant_category(category_data: PlantCategoryCreate):
     response_model=List[PlantCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_all_plant_categories():
+async def get_all_plant_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).stream()
         categories = []
-        for doc in docs:
+        async for doc in docs:
             category_data = doc.to_dict()
+            if not category_data:
+                continue
+
             category_data["id"] = doc.id
             categories.append(PlantCategoryResponse(**category_data))
         return categories
@@ -68,9 +71,9 @@ def get_all_plant_categories():
     response_model=PlantCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_plant_category_by_id(category_id: str):
+async def get_plant_category_by_id(category_id: str):
     try:
-        doc = (
+        doc = await (
             db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES)
             .document(category_id)
             .get()
@@ -99,15 +102,14 @@ def get_plant_category_by_id(category_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def update_plant_category(category_id: str, category_update: PlantCategoryUpdate):
+async def update_plant_category(category_id: str, category_update: PlantCategoryUpdate):
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
             category_id
         )
-        if not category_ref.get().exists:
+        if not (await category_ref.get()).exists:
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
-        # `exclude_unset=True` penting untuk operasi PATCH
         update_data = category_update.model_dump(exclude_unset=True)
 
         if not update_data:
@@ -115,7 +117,7 @@ def update_plant_category(category_id: str, category_update: PlantCategoryUpdate
                 status_code=400, detail="Tidak ada data untuk diperbarui."
             )
 
-        category_ref.update(update_data)
+        await category_ref.update(update_data)
 
         return SuccessResponse(message="Kategori tanaman berhasil diperbarui.")
     except HTTPException as he:
@@ -129,15 +131,15 @@ def update_plant_category(category_id: str, category_update: PlantCategoryUpdate
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def delete_plant_category(category_id: str):
+async def delete_plant_category(category_id: str):
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
             category_id
         )
-        if not category_ref.get().exists:
+        if not (await category_ref.get()).exists:
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
-        category_ref.delete()
+        await category_ref.delete()
         return SuccessResponse(message="Kategori tanaman berhasil dihapus.")
     except HTTPException as he:
         raise he

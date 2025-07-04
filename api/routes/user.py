@@ -19,7 +19,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.post("/register")
-def register_user(profile: User, user=Depends(verify_firebase_token)):
+async def register_user(profile: User, user=Depends(verify_firebase_token)):
     uid = user.get("uid")
     email = user.get("email")
 
@@ -43,7 +43,7 @@ def register_user(profile: User, user=Depends(verify_firebase_token)):
 
     try:
         doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(uid)
-        doc_ref.set(
+        await doc_ref.set(
             {
                 "uid": uid,
                 "email": email,
@@ -63,11 +63,11 @@ def register_user(profile: User, user=Depends(verify_firebase_token)):
 
 
 @router.post("/admin-reg", response_model=SuccessResponse)
-def register_admin(user=Depends(verify_firebase_token)):
+async def register_admin(user=Depends(verify_firebase_token)):
     uid = user.get("uid")
 
     try:
-        user_doc = db.collection(FIRESTORE_COLLECTION_USERS).document(uid).get()
+        user_doc = await db.collection(FIRESTORE_COLLECTION_USERS).document(uid).get()
 
         if not user_doc.exists:
             raise HTTPException(
@@ -100,7 +100,7 @@ def register_admin(user=Depends(verify_firebase_token)):
 
 
 @router.patch("/", response_model=SuccessResponse)
-def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
+async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
     uid = user.get("uid")
 
     if not update_data.model_dump(exclude_unset=True):
@@ -112,7 +112,7 @@ def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
     try:
         doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(uid)
 
-        if not doc_ref.get().exists:
+        if not (await doc_ref.get()).exists:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="User belum terdaftar"
             )
@@ -131,7 +131,7 @@ def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
                     detail="Username sudah digunakan oleh user lain",
                 )
 
-        doc_ref.update(update_data.model_dump(exclude_unset=True))
+        await doc_ref.update(update_data.model_dump(exclude_unset=True))
 
         return SuccessResponse(message="Profile berhasil diupdate")
 

@@ -1,9 +1,9 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud.firestore_v1 import (
-    DocumentReference,
+    AsyncDocumentReference,
     FieldFilter,
     Increment,
-    field_path,
 )
 from typing import Optional
 
@@ -13,9 +13,13 @@ from constants.collection_name import (
     FIRESTORE_COLLECTION_DISEASES,
     FIRESTORE_DOCUMENT_METADATA,
 )
-from schemas.diseases import DiseaseCreate, DiseaseResponse, DiseasesPaginatedResponse
+from schemas.diseases import (
+    DiseaseCreate,
+    DiseaseResponse,
+    DiseasesCursorResponse,
+    DiseasesPaginatedResponse,
+)
 from schemas.default_success import SuccessResponse
-from utils.get_category_data import get_category_data
 from utils.middlewares.verify_is_admin import verify_is_admin
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.slugify import slugify
@@ -29,7 +33,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     status_code=201,
     dependencies=[Depends(verify_is_admin)],
 )
-def add_new_disease(new_disease: DiseaseCreate):
+async def add_new_disease(new_disease: DiseaseCreate):
     try:
         disease_id = slugify(new_disease.name)
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
@@ -37,7 +41,7 @@ def add_new_disease(new_disease: DiseaseCreate):
             new_disease.category_id
         )
 
-        if disease_ref.get().exists:
+        if (await disease_ref.get()).exists:
             raise HTTPException(
                 status_code=400,
                 detail=f"Penyakit dengan nama '{new_disease.name}' sudah ada.",
@@ -46,7 +50,7 @@ def add_new_disease(new_disease: DiseaseCreate):
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             new_disease.category_id
         )
-        category_doc = category_ref.get()
+        category_doc = await category_ref.get()
         if not category_doc.exists:
             raise HTTPException(
                 status_code=404,
@@ -67,13 +71,17 @@ def add_new_disease(new_disease: DiseaseCreate):
         data_to_save["category_ref"] = category_ref
         data_to_save["category_name"] = category_name
 
-        disease_ref.set(data_to_save)
-
         meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
             FIRESTORE_DOCUMENT_METADATA
         )
-        meta_ref.set({"total_items": Increment(1)}, merge=True)
-        category_ref.set({"disease_count": Increment(1)}, merge=True)
+
+        tasks = [
+            disease_ref.set(data_to_save),
+            meta_ref.set({"total_items": Increment(1)}, merge=True),
+            category_ref.set({"disease_count": Increment(1)}, merge=True),
+        ]
+
+        await asyncio.gather(*tasks)
 
         return SuccessResponse(message="Penyakit berhasil ditambahkan")
     except HTTPException as he:
@@ -89,7 +97,7 @@ def add_new_disease(new_disease: DiseaseCreate):
     response_model=DiseasesPaginatedResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_all_diseases(
+async def get_all_diseases(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(
         None, description="ID dokumen terakhir dari halaman sebelumnya"
@@ -99,76 +107,86 @@ def get_all_diseases(
     ),
 ):
     try:
-        diseases_ref = db.collection(FIRESTORE_COLLECTION_DISEASES)
-        base_query = diseases_ref
-        total_items = 0
+        base_query = db.collection(FIRESTORE_COLLECTION_DISEASES)
 
         if category_id:
             category_ref = db.collection(
                 FIRESTORE_COLLECTION_DISEASE_CATEGORIES
             ).document(category_id)
-            category_doc = category_ref.get()
-            category_data = category_doc.to_dict()
-            if (
-                category_doc.exists
-                and category_data
-                and "disease_count" in category_data
-            ):
-                total_items = category_data["disease_count"]
-            else:
-                raise HTTPException(
-                    status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
-                )
             base_query = base_query.where(
                 filter=FieldFilter("category_ref", "==", category_ref)
             )
-        else:
-            meta_doc = diseases_ref.document(FIRESTORE_DOCUMENT_METADATA).get()
-            meta_data = meta_doc.to_dict()
-            if meta_doc.exists and meta_data and "total_items" in meta_data:
-                total_items = meta_data["total_items"]
-            else:
-                raise HTTPException(
-                    status_code=500, detail="Metadata jumlah penyakit tidak tersedia."
-                )
 
-        query_for_page = base_query.order_by(field_path.FieldPath.document_id())
+        query_for_page = base_query.order_by("__name__")
 
         if start_after_doc_id:
-            start_doc_ref = diseases_ref.document(start_after_doc_id).get()
-            if not start_doc_ref.exists:
-                raise HTTPException(
-                    status_code=404, detail="Dokumen awal tidak ditemukan."
-                )
-            query_for_page = query_for_page.start_after(start_doc_ref)
+            start_doc_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
+                start_after_doc_id
+            )
+            start_doc = await start_doc_ref.get()
+            if start_doc.exists:
+                query_for_page = query_for_page.start_after(start_doc)
 
-        docs = query_for_page.limit(limit).stream()
+        docs_stream = query_for_page.limit(limit).stream()
+        diseases_docs = [
+            doc async for doc in docs_stream if doc.id != FIRESTORE_DOCUMENT_METADATA
+        ]
+
+        if not diseases_docs:
+            return DiseasesCursorResponse(diseases=[], next_cursor=None)
+
+        category_refs_to_fetch = {
+            ref
+            for doc in diseases_docs
+            if (data := doc.to_dict())
+            and (ref := data.get("category_ref"))
+            and isinstance(ref, AsyncDocumentReference)
+        }
+
+        categories_map = {}
+        if category_refs_to_fetch:
+            category_docs_stream = db.get_all(list(category_refs_to_fetch))
+            categories_map = {
+                doc.id: doc.to_dict()
+                async for doc in category_docs_stream
+                if doc.exists
+            }
+
+        # 8. Susun data respons
         diseases = []
-        for doc in docs:
-            if doc.id == FIRESTORE_DOCUMENT_METADATA:
-                continue
-
+        for doc in diseases_docs:
             disease_data = doc.to_dict()
             if not disease_data:
                 continue
 
             category_ref = disease_data.get("category_ref")
-            category_data = (
-                get_category_data(category_ref)
-                if isinstance(category_ref, DocumentReference)
-                else {"id": None, "name": "None", "description": "None"}
-            )
+            category_data = {"id": None, "name": "None"}
+
+            if (
+                isinstance(category_ref, AsyncDocumentReference)
+                and category_ref.id in categories_map
+            ):
+                cat_raw = categories_map.get(category_ref.id)
+                category_data = {
+                    "id": category_ref.id,
+                    "name": cat_raw.get("name", "None") if cat_raw else "None",
+                }
 
             response_data = {**disease_data, "id": doc.id, "category": category_data}
             diseases.append(DiseaseResponse(**response_data))
 
-        max_page = (total_items + limit - 1) // limit if limit > 0 else 0
+        # 9. Tentukan kursor untuk halaman berikutnya
+        next_cursor = diseases_docs[-1].id if len(diseases_docs) == limit else None
 
-        return DiseasesPaginatedResponse(
-            diseases=diseases, total_items=total_items, max_page=max_page
-        )
+        return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor)
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Terjadi kesalahan saat mengambil data penyakit: {str(e)}",
+        )
 
 
 @router.get(
@@ -176,10 +194,10 @@ def get_all_diseases(
     response_model=DiseaseResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-def get_disease_by_id(disease_id: str):
+async def get_disease_by_id(disease_id: str):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
-        disease_doc = disease_ref.get()
+        disease_doc = await disease_ref.get()
 
         if not disease_doc.exists:
             raise HTTPException(
@@ -215,10 +233,10 @@ def get_disease_by_id(disease_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def update_disease(disease_id: str, updated_disease: DiseaseResponse):
+async def update_disease(disease_id: str, updated_disease: DiseaseResponse):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
-        if not disease_ref.get().exists:
+        if not (await disease_ref.get()).exists:
             raise HTTPException(status_code=404, detail="Penyakit tidak ditemukan.")
 
         update_data = updated_disease.model_dump(exclude_unset=True)
@@ -232,7 +250,7 @@ def update_disease(disease_id: str, updated_disease: DiseaseResponse):
             category_ref = db.collection(
                 FIRESTORE_COLLECTION_DISEASE_CATEGORIES
             ).document(category_id)
-            category_doc = category_ref.get()
+            category_doc = await category_ref.get()
             if not category_doc.exists:
                 raise HTTPException(
                     status_code=404,
@@ -250,7 +268,7 @@ def update_disease(disease_id: str, updated_disease: DiseaseResponse):
             update_data["category_ref"] = category_ref
             update_data["category_name"] = category_data.get("name")
 
-        disease_ref.update(update_data)
+        await disease_ref.update(update_data)
         return SuccessResponse(message="Penyakit berhasil diperbarui")
     except HTTPException as he:
         raise he
@@ -263,10 +281,10 @@ def update_disease(disease_id: str, updated_disease: DiseaseResponse):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-def delete_disease(disease_id: str):
+async def delete_disease(disease_id: str):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
-        disease_doc = disease_ref.get()
+        disease_doc = await disease_ref.get()
 
         if not disease_doc.exists:
             raise HTTPException(
@@ -278,11 +296,11 @@ def delete_disease(disease_id: str):
 
         category_ref = disease_doc.get("category_ref") if disease_data else None
 
-        disease_ref.delete()
+        await disease_ref.delete()
         meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
             FIRESTORE_DOCUMENT_METADATA
         )
-        meta_ref.update({"total_items": Increment(-1)})
+        await meta_ref.update({"total_items": Increment(-1)})
         if category_ref:
             category_ref.update({"disease_count": Increment(-1)})
 
