@@ -3,13 +3,11 @@ from PIL import Image
 from fastapi.responses import JSONResponse
 from typing import Optional
 import io
-from google.cloud.firestore_v1 import DocumentReference
 import numpy as np
 from starlette.concurrency import run_in_threadpool
 import tensorflow as tf
 
 from constants.labels import class_names, plant_translate
-from utils.get_category_data import get_category_data
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.preprocess_image import preprocess_image
 from schemas.predict_response import PredictResponse, PlantDetail
@@ -91,14 +89,7 @@ async def get_plant_and_disease_detail(
                 detail=f"Data tanaman dengan ID '{plant_id}' tidak valid",
             )
 
-        plant_cat_ref = plant_data.get("category_ref")
-        p_category_data = (
-            get_category_data(plant_cat_ref)
-            if isinstance(plant_cat_ref, DocumentReference)
-            else {"id": None, "name": "None", "description": "None"}
-        )
-
-        plant_response = {**plant_data, "id": plant_doc.id, "category": p_category_data}
+        plant_response = {**plant_data, "id": plant_doc.id}
         plant = PlantResponse(**plant_response)
 
         disease = None
@@ -119,17 +110,9 @@ async def get_plant_and_disease_detail(
                     detail=f"Data penyakit dengan ID '{disease_id}' tidak valid",
                 )
 
-            disease_cat_ref = disease_data.get("category_ref")
-            d_category_data = (
-                get_category_data(disease_cat_ref)
-                if isinstance(disease_cat_ref, DocumentReference)
-                else {"id": None, "name": "None", "description": "None"}
-            )
-
             disease_response = {
                 **disease_data,
                 "id": disease_doc.id,
-                "category": d_category_data,
             }
             disease = DiseaseResponse(**disease_response)
 

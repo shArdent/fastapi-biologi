@@ -61,8 +61,8 @@ class PlantUpdate(BaseModel):
 
 
 class PlantResponse(PlantBase):
+    category_name: str
     id: str
-    category: PlantCategoryResponse
 
 
 class PlantsCursorResponse(BaseModel):
