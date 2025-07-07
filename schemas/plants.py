@@ -54,6 +54,7 @@ class PlantUpdate(BaseModel):
     latin_name: Optional[str] = None
     family: Optional[str] = None
     description: Optional[str] = None
+    baseis_information: Optional[BasicInformation] = None
     characteristics: Optional[Characteristics] = None
     grow_information: Optional[GrowInformation] = None
     use: Optional[str] = None

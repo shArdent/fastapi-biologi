@@ -10,9 +10,6 @@ app = FastAPI(
     title="API Deteksi Penyakit Tanaman",
     description="API Project penelitian biologi deteksi penyakit & hama tanaman",
     version="1.0.0",
-    servers=[
-        {"url": "https://stapin.site", "description": "Server"}
-    ],
 )
 
 
