@@ -17,8 +17,8 @@ from schemas.plants import PlantResponse
 from schemas.diseases import DiseaseResponse
 from db.firestore import db
 from constants.collection_name import (
-    FIRESTORE_COLLECTION_PLANTS,
     FIRESTORE_COLLECTION_DISEASES,
+    FIRESTORE_COLLECTION_PLANTS,
 )
 
 router = APIRouter(prefix="/predict", tags=["predict"])

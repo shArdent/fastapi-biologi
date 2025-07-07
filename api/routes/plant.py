@@ -277,7 +277,7 @@ async def delete_plant(plant_id: str):
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
         plant_doc = await plant_ref.get()
 
-        if not await plant_doc.exists:
+        if not plant_doc.exists:
             raise HTTPException(
                 status_code=404,
                 detail=f"Tanaman dengan nama {plant_id} tidak ditemukan",

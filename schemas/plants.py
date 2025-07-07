@@ -7,8 +7,8 @@ from schemas.plant_categories import PlantCategoryResponse
 
 class Characteristics(BaseModel):
     max_height: str
-    leaf_color: List[str]
-    flower_color: List[str]
+    leaf_color: str
+    flower_color: str
     flower_size: str
     leaf_shape: str
     stem_type: str
@@ -38,10 +38,12 @@ class GrowInformation(BaseModel):
 class PlantBase(BaseModel):
     name: str
     latin_name: str
+    family: str
     description: str
+    basic_information: BasicInformation
     characteristics: Characteristics
     grow_information: GrowInformation
-    use: List[str]
+    use: str
 
 
 class PlantCreate(PlantBase):
@@ -53,10 +55,11 @@ class PlantCreate(PlantBase):
 class PlantUpdate(BaseModel):
     name: Optional[str] = None
     latin_name: Optional[str] = None
+    family: Optional[str] = None
     description: Optional[str] = None
     characteristics: Optional[Characteristics] = None
     grow_information: Optional[GrowInformation] = None
-    use: Optional[List[str]] = None
+    use: Optional[str] = None
     category_id: Optional[str] = None
 
 
