@@ -14,3 +14,5 @@ dist/
 .git/
 .gitignore
 Dockerfile
+creds/
+models/

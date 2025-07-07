@@ -65,14 +65,10 @@ class DiseaseUpdate(BaseModel):
 
 class DiseaseResponse(DiseaseBase):
     id: str
-    category: DiseaseCategoryResponse
+    category_name: str
+
 
 class DiseasesCursorResponse(BaseModel):
     diseases: List[DiseaseResponse]
     next_cursor: Optional[str]
 
-
-class DiseasesPaginatedResponse(BaseModel):
-    diseases: list[DiseaseResponse]
-    total_items: int
-    max_page: int

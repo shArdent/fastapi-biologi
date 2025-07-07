@@ -1,7 +1,6 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud.firestore_v1 import (
-    AsyncDocumentReference,
     Increment,
     FieldFilter,
 )
@@ -91,7 +90,7 @@ async def add_new_plant(new_plant: PlantCreate):
 @router.get(
     "/",
     response_model=PlantsCursorResponse,
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 async def get_all_plants(
     limit: int = Query(10, ge=1, le=100),
@@ -133,41 +132,13 @@ async def get_all_plants(
         if not plants_docs:
             return PlantsCursorResponse(plants=[], next_cursor=None)
 
-        category_refs_to_fetch = set()
-        for doc in plants_docs:
-            plant_data = doc.to_dict()
-            if plant_data:
-                category_ref = plant_data.get("category_ref")
-                if isinstance(category_ref, AsyncDocumentReference):
-                    category_refs_to_fetch.add(category_ref)
-
-        categories_map = {}
-        if category_refs_to_fetch:
-            category_docs = db.get_all(list(category_refs_to_fetch))
-            categories_map = {
-                doc.id: doc.to_dict() async for doc in category_docs if doc.exists
-            }
-
         plants = []
         for doc in plants_docs:
             plant_data = doc.to_dict()
             if not plant_data:
                 continue
 
-            category_ref = plant_data.get("category_ref")
-            category_data = {"id": None, "name": "None"}
-
-            if (
-                isinstance(category_ref, AsyncDocumentReference)
-                and category_ref.id in categories_map
-            ):
-                cat_raw = categories_map[category_ref.id]
-                category_data = {
-                    "id": category_ref.id,
-                    "name": cat_raw.get("name", "None") if cat_raw else None,
-                }
-
-            response_data = {**plant_data, "id": doc.id, "category": category_data}
+            response_data = {**plant_data, "id": doc.id}
             plants.append(PlantResponse(**response_data))
 
         next_cursor = plants_docs[-1].id if len(plants_docs) == limit else None
@@ -199,19 +170,9 @@ async def get_plant_by_id(plant_id: str):
         if not plant_data:
             raise HTTPException(status_code=404, detail="Data tanaman kosong.")
 
-        category_ref = plant_data.get("category_ref")
-        category_data = {"id": None, "name": "Tidak ada kategori", "description": None}
-
-        if isinstance(category_ref, AsyncDocumentReference):
-            category_data["id"] = category_ref.id
-            category_data["name"] = plant_data.get(
-                "category_name", "Tidak ada kategori"
-            )
-
         response_data = {
             **plant_data,
             "id": plant_doc.id,
-            "category": category_data,
         }
         return PlantResponse(**response_data)
     except HTTPException as he:
