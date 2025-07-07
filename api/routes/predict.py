@@ -3,8 +3,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from schemas.plants import PlantResponse
+from schemas.predict_response import PlantDetail
 from utils.middlewares.verify_token import verify_firebase_token
-from schemas.predict_response import  PlantDetail
 from schemas.diseases import DiseaseResponse
 from db.firestore import db
 from constants.collection_name import (

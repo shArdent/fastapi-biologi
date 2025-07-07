@@ -24,7 +24,7 @@ async def register_user(profile: User, user=Depends(verify_firebase_token)):
     email = user.get("email")
 
     try:
-        existing = (
+        existing = await (
             db.collection(FIRESTORE_COLLECTION_USERS)
             .where("username", "==", profile.username)
             .limit(1)
@@ -54,6 +54,8 @@ async def register_user(profile: User, user=Depends(verify_firebase_token)):
                 "role": "user",
             }
         )
+
+        return SuccessResponse(message="Berhasil melakukan registrasi akun")
 
     except GoogleCloudError as e:
         raise HTTPException(

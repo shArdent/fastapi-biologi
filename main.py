@@ -6,7 +6,15 @@ from api.main import api_router
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(
+    title="API Deteksi Penyakit Tanaman",
+    description="API Project penelitian biologi deteksi penyakit & hama tanaman",
+    version="1.0.0",
+    servers=[
+        {"url": "https://stapin.site", "description": "Server"}
+    ],
+)
+
 
 origins = [
     "http://localhost:3000",  # contoh frontend lokal
@@ -18,8 +26,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,  # atau ["*"] untuk semua origin
     allow_credentials=True,
-    allow_methods=["*"],     # atau ["GET", "POST", ...]
-    allow_headers=["*"],     # atau header tertentu: ["Authorization", "Content-Type"]
+    allow_methods=["*"],  # atau ["GET", "POST", ...]
+    allow_headers=["*"],  # atau header tertentu: ["Authorization", "Content-Type"]
 )
 
 app.include_router(api_router, prefix="/api")
