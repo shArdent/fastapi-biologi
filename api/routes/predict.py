@@ -2,14 +2,14 @@ import io
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from PIL import Image
 import numpy as np
-import tensorflow as tf
 
 from schemas.plants import PlantResponse
-from schemas.predict_response import PlantDetail, PredictResponse
+from schemas.predict_response import PredictResponse, PlantDetail
+from utils.decode_prediction import decode_prediction
+from utils.gradcam import get_gradcam_heatmap, overlay_bounding_boxes
+from utils.image_to_base64 import image_to_base64
 from utils.middlewares.verify_token import verify_firebase_token
 from schemas.diseases import DiseaseResponse
 from db.firestore import db
@@ -19,49 +19,60 @@ from constants.collection_name import (
 )
 from constants.labels import class_names, plant_translate
 from utils.preprocess_image import preprocess_image
-
-model = tf.keras.models.load_model("models/env2l.h5")
+from utils.load_model import env2, base_env2
+from utils.slugify import slugify
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
+
 @router.post(
-    "/", response_model=PredictResponse, dependencies=[Depends(verify_firebase_token)]
+    "/",
+    response_model=PredictResponse,  # dependencies=[Depends(verify_firebase_token)]
 )
-async def predict(file: UploadFile=File(...)):
+async def predict_image(file: UploadFile = File(...)):
     try:
-        image_bytes = await file.read()
-        image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        img_preprocessed = preprocess_image(image)
 
-        input_tensor = preprocess_image(image)
-        prediction = await run_in_threadpool(model.predict, input_tensor)
-        predicted_class = class_names[np.argmax(prediction)]
-        confidence = float(np.max(prediction))
+        prediction = env2.predict(img_preprocessed)
+        pred_values = prediction[0]
 
-        plant_raw, disease_raw = predicted_class.split("___")
-        plant_name = plant_raw.replace("_", " ").replace("Corn (maize)", "Jagung")
+        class_index = int(np.argmax(pred_values))
+        confidence = float(np.max(pred_values))
 
-        plant_key = (
-            plant_name.replace("(", "").replace(")", "").replace(",", "").strip()
-        )
-        plant_final = plant_translate.get(plant_key, plant_key.lower())
+        if class_index >= len(class_names):
+            raise HTTPException(status_code=400, detail="Invalid class index predicted")
 
-        if "healthy" in disease_raw.lower():
-            result_text = f"Tanaman {plant_final} ini sehat."
-            disease_name = None
-        else:
-            disease_name = disease_raw.replace("_", " ")
-            result_text = (
-                f"Tanaman {plant_final} ini memiliki penyakit {disease_name.lower()}."
+        if class_index >= env2.output_shape[1]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Model output only has {env2.output_shape[1]} classes, but predicted index is {class_index}",
             )
 
-        return PredictResponse(
-            plant=plant_final,
-            disease=disease_name.lower() if disease_name else None,
-            result=result_text,
-            confidence=f"{confidence:.2%}",
+        predicted_class = class_names[class_index]
+        plant_name, disease_name, is_healthy, readable_text = decode_prediction(
+            predicted_class
         )
+
+        cam_base64 = None
+        if not is_healthy:
+            heatmap = get_gradcam_heatmap(
+                base_env2, img_preprocessed, "top_conv", class_index
+            )
+            cam_image = overlay_bounding_boxes(image, heatmap)
+            cam_base64 = image_to_base64(cam_image)
+
+        return PredictResponse(
+            plant=slugify(plant_name),
+            disease=slugify(disease_name),
+            confidence=(round(confidence, 4)),
+            message=readable_text,
+            cam_image=cam_base64,
+        )
+
     except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Error during prediction: {e}")
 
 
 @router.get(

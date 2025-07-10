@@ -1,8 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from schemas.disease_categories import DiseaseCategoryResponse
-
 
 class RecoveryStep(BaseModel):
     heading: str
@@ -71,4 +69,3 @@ class DiseaseResponse(DiseaseBase):
 class DiseasesCursorResponse(BaseModel):
     diseases: List[DiseaseResponse]
     next_cursor: Optional[str]
-
