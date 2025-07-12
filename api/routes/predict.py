@@ -17,7 +17,7 @@ from constants.collection_name import (
     FIRESTORE_COLLECTION_DISEASES,
     FIRESTORE_COLLECTION_PLANTS,
 )
-from constants.labels import class_names, plant_translate
+from constants.labels import class_names
 from utils.preprocess_image import preprocess_image
 from utils.load_model import env2, base_env2
 from utils.slugify import slugify
@@ -26,8 +26,7 @@ router = APIRouter(prefix="/predict", tags=["predict"])
 
 
 @router.post(
-    "/",
-    response_model=PredictResponse,  # dependencies=[Depends(verify_firebase_token)]
+    "/", response_model=PredictResponse, dependencies=[Depends(verify_firebase_token)]
 )
 async def predict_image(file: UploadFile = File(...)):
     try:
@@ -54,6 +53,8 @@ async def predict_image(file: UploadFile = File(...)):
         plant_name, disease_name, is_healthy, readable_text = decode_prediction(
             predicted_class
         )
+
+        print(plant_name)
 
         cam_base64 = None
         if not is_healthy:
