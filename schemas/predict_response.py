@@ -8,8 +8,9 @@ from schemas.diseases import DiseaseResponse
 class PredictResponse(BaseModel):
     plant: str
     disease: Optional[str] = None
-    result: str
-    confidence: str
+    confidence: float
+    message: str
+    cam_image: Optional[str]
 
 
 class PlantDetail(BaseModel):

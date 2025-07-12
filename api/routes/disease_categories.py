@@ -100,7 +100,9 @@ async def get_disease_category_by_id(category_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-async def update_disease_category(category_id: str, category_update: DiseaseCategoryUpdate):
+async def update_disease_category(
+    category_id: str, category_update: DiseaseCategoryUpdate
+):
     try:
         category_ref = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
             category_id

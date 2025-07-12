@@ -1,6 +1,15 @@
 from fastapi import APIRouter
 
-from api.routes import predict, my_plant, plant, disease, test, user, plant_categories, disease_categories
+from api.routes import (
+    predict,
+    my_plant,
+    plant,
+    disease,
+    test,
+    user,
+    plant_categories,
+    disease_categories,
+)
 
 api_router = APIRouter(prefix="/v1")
 
