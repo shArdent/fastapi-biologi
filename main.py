@@ -1,8 +1,13 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
+from redis import asyncio as redis
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.main import api_router
+from utils.key_builder import no_auth_header_key_builder
 
 load_dotenv()
 
@@ -26,5 +31,16 @@ app.add_middleware(
     allow_methods=["*"],  # atau ["GET", "POST", ...]
     allow_headers=["*"],  # atau header tertentu: ["Authorization", "Content-Type"]
 )
+
+
+@app.on_event("startup")
+async def startup():
+    redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+    FastAPICache.init(
+        RedisBackend(redis_client),
+        prefix="fastapi-cache",
+        key_builder=no_auth_header_key_builder,
+    )
+
 
 app.include_router(api_router, prefix="/api")

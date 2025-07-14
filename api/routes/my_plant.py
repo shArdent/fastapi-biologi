@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi_cache.decorator import cache
 from google.cloud.firestore_v1 import (
     SERVER_TIMESTAMP,
     Increment,
@@ -89,7 +90,8 @@ async def add_my_plant(
 
 
 @router.get("/{user_id}", response_model=PaginatedMyPlantSummary)
-def get_all_my_plants(
+@cache(expire=300)
+async def get_all_my_plants(
     user_id: str,
     page_size: int = Query(10, gt=0, le=50),
     last_doc_id: Optional[str] = None,
@@ -243,7 +245,7 @@ async def update_my_plant(
 
 
 @router.delete("/{user_id}/d/{my_plant_id}", response_model=SuccessResponse)
-def delete_my_plant(
+async def delete_my_plant(
     user_id: str, my_plant_id: str, _: dict = Depends(verify_user_id_match)
 ):
     try:

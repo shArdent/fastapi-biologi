@@ -5,6 +5,7 @@ from google.cloud.firestore_v1 import (
     FieldFilter,
 )
 from typing import Optional
+from fastapi_cache.decorator import cache
 
 from db.firestore import db
 from constants.collection_name import (
@@ -92,6 +93,7 @@ async def add_new_plant(new_plant: PlantCreate):
     response_model=PlantsCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(expire=300)
 async def get_all_plants(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(
@@ -159,6 +161,7 @@ async def get_all_plants(
     response_model=PlantResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(expire=300)
 async def get_plant_by_id(plant_id: str):
     try:
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
