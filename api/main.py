@@ -9,6 +9,7 @@ from api.routes import (
     user,
     plant_categories,
     disease_categories,
+    upload,
 )
 
 api_router = APIRouter(prefix="/v1")
@@ -21,3 +22,4 @@ api_router.include_router(user.router)
 api_router.include_router(my_plant.router)
 api_router.include_router(plant_categories.router)
 api_router.include_router(disease_categories.router)
+api_router.include_router(upload.router)

@@ -41,6 +41,7 @@ class PlantBase(BaseModel):
     characteristics: Characteristics
     grow_information: GrowInformation
     use: str
+    images: Optional[list[str]]
 
 
 class PlantCreate(PlantBase):
