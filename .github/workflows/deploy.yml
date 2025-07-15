@@ -3,8 +3,7 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - dev
-      - deploy
+      - main
 
 jobs:
   deploy:
@@ -17,18 +16,8 @@ jobs:
       SSH_KEY: ${{ secrets.SSH_KEY }}
 
     steps:
-      - name: Print SSH info
-        run: |
-          echo "Host: $SSH_HOST"
-          echo "User: $SSH_USER"
-          echo "Port: $SSH_PORT"
-    
       - name: Checkout Repo
         uses: actions/checkout@v3
-
-      - name: Debug Info (Optional)
-        run: |
-          echo "Connecting to $SSH_USER@$SSH_HOST on port $SSH_PORT"
 
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.0
