@@ -3,23 +3,40 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - main
+      - dev
+      - deploy
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      SSH_HOST: ${{ secrets.VPS_HOST }}
+      SSH_USER: ${{ secrets.VPS_USER }}
+      SSH_PORT: ${{ secrets.VPS_PORT }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+
     steps:
+      - name: Print SSH info
+        run: |
+          echo "Host: $SSH_HOST"
+          echo "User: $SSH_USER"
+          echo "Port: $SSH_PORT"
+    
       - name: Checkout Repo
         uses: actions/checkout@v3
+
+      - name: Debug Info (Optional)
+        run: |
+          echo "Connecting to $SSH_USER@$SSH_HOST on port $SSH_PORT"
 
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          port: ${{ secrets.VPS_PORT }}
-          key: ${{ secrets.SSH_KEY }}
+          host: ${{ env.SSH_HOST }}
+          username: ${{ env.SSH_USER }}
+          port: ${{ env.SSH_PORT }}
+          key: ${{ env.SSH_KEY }}
           script: |
             cd fastapi-biologi
             git pull origin main
