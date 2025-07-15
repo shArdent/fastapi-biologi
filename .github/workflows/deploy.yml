@@ -30,5 +30,6 @@ jobs:
             cd fastapi-biologi
             git pull origin main
             cd
+            docker system prune -af
             docker compose down
             docker compose up -d --build
