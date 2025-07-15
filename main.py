@@ -6,6 +6,8 @@ from fastapi_cache.backends.redis import RedisBackend
 
 from fastapi.middleware.cors import CORSMiddleware
 
+import os
+
 from api.main import api_router
 from utils.key_builder import no_auth_header_key_builder
 
@@ -35,7 +37,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+    redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT"), decode_responses=True)
     FastAPICache.init(
         RedisBackend(redis_client),
         prefix="fastapi-cache",

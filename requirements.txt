@@ -7,4 +7,4 @@ python-dotenv
 opencv-python-headless
 tensorflow-cpu
 pillow
-redis
+fastapi-cache2[redis]
