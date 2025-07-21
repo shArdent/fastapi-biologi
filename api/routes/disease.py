@@ -1,6 +1,5 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi_cache.decorator import cache
 from google.cloud.firestore_v1 import (
     FieldFilter,
     Increment,
@@ -96,7 +95,6 @@ async def add_new_disease(new_disease: DiseaseCreate):
     response_model=DiseasesCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(expire=300)
 async def get_all_diseases(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(
@@ -162,7 +160,6 @@ async def get_all_diseases(
     response_model=DiseaseResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(expire=300)
 async def get_disease_by_id(disease_id: str):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)

@@ -1,15 +1,14 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
-from redis import asyncio as redis
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-
 from fastapi.middleware.cors import CORSMiddleware
+import gdown
 
 import os
+import requests
 
 from api.main import api_router
 from utils.key_builder import no_auth_header_key_builder
+from utils.load_model import download_model, load_model
 
 load_dotenv()
 
@@ -37,12 +36,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT"), decode_responses=True)
-    FastAPICache.init(
-        RedisBackend(redis_client),
-        prefix="fastapi-cache",
-        key_builder=no_auth_header_key_builder,
-    )
+    MODEL_PATH = os.getenv("MODEL_PATH")
+    download_model(MODEL_PATH)
+    load_model(MODEL_PATH)
 
 
 app.include_router(api_router, prefix="/api")

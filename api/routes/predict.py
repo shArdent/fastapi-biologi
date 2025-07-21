@@ -3,7 +3,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from PIL import Image
-from fastapi_cache.decorator import cache
 import numpy as np
 
 from schemas.plants import PlantResponse
@@ -80,7 +79,6 @@ async def predict_image(file: UploadFile = File(...)):
 @router.get(
     "/detail", response_model=PlantDetail, dependencies=[Depends(verify_firebase_token)]
 )
-@cache(expire=300)
 async def get_plant_and_disease_detail(
     plant_id: str,
     disease_id: Optional[str] = Query(

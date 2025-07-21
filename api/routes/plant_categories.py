@@ -1,6 +1,5 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_cache.decorator import cache
 
 from constants.collection_name import FIRESTORE_COLLECTION_PLANT_CATEGORIES
 from schemas.default_success import SuccessResponse
@@ -51,7 +50,6 @@ async def add_plant_category(category_data: PlantCategoryCreate):
     response_model=List[PlantCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(expire=300)
 async def get_all_plant_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).stream()
@@ -73,7 +71,6 @@ async def get_all_plant_categories():
     response_model=PlantCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(expire=300)
 async def get_plant_category_by_id(category_id: str):
     try:
         doc = await (

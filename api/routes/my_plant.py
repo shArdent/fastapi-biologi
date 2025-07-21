@@ -1,6 +1,5 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi_cache.decorator import cache
 from google.cloud.firestore_v1 import (
     SERVER_TIMESTAMP,
     Increment,
@@ -90,7 +89,6 @@ async def add_my_plant(
 
 
 @router.get("/{user_id}", response_model=PaginatedMyPlantSummary)
-@cache(expire=300)
 async def get_all_my_plants(
     user_id: str,
     page_size: int = Query(10, gt=0, le=50),
