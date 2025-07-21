@@ -31,7 +31,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     "/",
     response_model=SuccessResponse,
     status_code=201,
-    # dependencies=[Depends(verify_is_admin)],
+    dependencies=[Depends(verify_is_admin)],
 )
 @cache(300)
 async def add_new_disease(new_disease: DiseaseCreate):
@@ -91,7 +91,7 @@ async def add_new_disease(new_disease: DiseaseCreate):
 
 @router.get(
     "/",
-    response_model=DiseasesCursorResponse,  # Pastikan model respons sesuai
+    response_model=DiseasesCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
 @cache(300)

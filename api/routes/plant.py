@@ -98,7 +98,7 @@ async def add_new_plant(new_plant: PlantCreate):
 @router.get(
     "/",
     response_model=PlantsCursorResponse,
-    # dependencies=[Depends(verify_firebase_token)],
+    dependencies=[Depends(verify_firebase_token)],
 )
 @cache(300)
 async def get_all_plants(
@@ -218,17 +218,14 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
         existing_data = snapshot.to_dict()
         update_data = updated_plant.model_dump(exclude_unset=True)
 
-        # 2. Handle jika ada pembaruan kategori
         if "categories_id" in update_data:
             new_category_ids = update_data.pop("categories_id")
 
-            # Ambil referensi kategori lama dari data yang ada
             old_categories_map = (
                 existing_data.get("categories", {}) if existing_data else {}
             )
             old_category_refs = set(old_categories_map.values())
 
-            # Ambil data kategori baru
             new_category_refs_map = {}
             if new_category_ids:
                 cat_refs_to_fetch = [

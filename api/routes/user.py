@@ -146,9 +146,7 @@ async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_toke
 
 
 @router.get(
-    "/",
-    response_model=list[UserResponse],
-    # dependencies=[Depends(verify_is_admin)]
+    "/", response_model=list[UserResponse], dependencies=[Depends(verify_is_admin)]
 )
 async def get_all_user():
     try:
@@ -160,7 +158,6 @@ async def get_all_user():
             if user_data:
                 ts = user_data.get("created_at")
                 user_data["created_at"] = ts.isoformat()
-                print(user_data)    
                 users.append(UserResponse(**user_data))
 
         return users
@@ -171,5 +168,39 @@ async def get_all_user():
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal melakukan registrasi: {e}",
+            detail=f"Gagal mengambil data user: {e}",
+        )
+
+
+@router.get(
+    "/{user_id}",
+    response_model=UserResponse,
+    dependencies=[Depends(verify_firebase_token)],
+)
+async def get_user_by_id(user_id: str):
+    try:
+        user_doc = (
+            await db.collection(FIRESTORE_COLLECTION_USERS).document(user_id).get()
+        )
+
+        if not user_doc.exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User tidak ditemukan.",
+            )
+
+        user_data = user_doc.to_dict()
+
+        created_at = user_data.get("created_at")
+        if created_at and hasattr(created_at, "isoformat"):
+            user_data["created_at"] = created_at.isoformat()
+
+        return UserResponse(**user_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengambil data user: {e}",
         )
