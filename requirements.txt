@@ -9,3 +9,4 @@ tensorflow-cpu
 pillow
 gdown
 imagekitio
+fastapi-cache2[redis]

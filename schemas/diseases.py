@@ -10,7 +10,7 @@ class DiseaseBase(BaseModel):
     preventions: str
     causes: str
     treatments: str
-    recovery_care: str
+    latin_name: str
 
 
 class DiseaseCreate(DiseaseBase):
@@ -27,13 +27,12 @@ class DiseaseUpdate(BaseModel):
     preventions: Optional[str] = None
     causes: Optional[str] = None
     treatments: Optional[str] = None
-    recovery_care: Optional[str] = None
-    category_id: Optional[list[str]] = None
+    categories_id: Optional[list[str]] = None
 
 
 class DiseaseResponse(DiseaseBase):
     id: str
-    category_name: list[str]
+    categories_name: list[str]
 
 
 class DiseasesCursorResponse(BaseModel):

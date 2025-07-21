@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from google.cloud.firestore_v1 import (
-    Increment,
+from google.cloud.firestore_v1 import ( Increment,
     FieldFilter,
 )
 from typing import Optional

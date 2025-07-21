@@ -5,7 +5,7 @@ from google.cloud.firestore_v1 import (
     Increment,
 )
 from typing import Optional
-from fastapi_cache.decorator import cache  
+from fastapi_cache.decorator import cache
 
 from db.firestore import db
 from constants.collection_name import (
@@ -31,7 +31,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     "/",
     response_model=SuccessResponse,
     status_code=201,
-    dependencies=[Depends(verify_is_admin)],
+    # dependencies=[Depends(verify_is_admin)],
 )
 @cache(300)
 async def add_new_disease(new_disease: DiseaseCreate):
@@ -45,7 +45,6 @@ async def add_new_disease(new_disease: DiseaseCreate):
                 detail=f"Penyakit dengan nama '{new_disease.name}' sudah ada.",
             )
 
-        # Ambil semua data kategori secara efisien
         categories_map = {}
         if new_disease.categories_id:
             cat_refs = [
@@ -63,23 +62,19 @@ async def add_new_disease(new_disease: DiseaseCreate):
                         detail="Satu atau lebih ID kategori tidak ditemukan.",
                     )
 
-        # Gunakan Batch Write untuk operasi atomik 🛡️
         batch = db.batch()
 
-        # Siapkan data untuk disimpan
         data_to_save = new_disease.model_dump()
         data_to_save.pop("categories_id")
         data_to_save["categories"] = categories_map
 
         batch.set(disease_ref, data_to_save)
 
-        # Tambahkan increment untuk metadata
         meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
             FIRESTORE_DOCUMENT_METADATA
         )
-        batch.update(meta_ref, {"total_items": Increment(1)})
+        batch.set(meta_ref, {"total_items": Increment(1)}, merge=True)
 
-        # Tambahkan increment untuk setiap kategori
         for cat_ref in categories_map.values():
             batch.update(cat_ref, {"disease_count": Increment(1)})
 
@@ -138,11 +133,19 @@ async def get_all_diseases(
             doc async for doc in docs_stream if doc.id != FIRESTORE_DOCUMENT_METADATA
         ]
 
-        diseases = [
-            DiseaseResponse(**{**doc.to_dict(), "id": doc.id})
-            for doc in diseases_docs
-            if doc.to_dict()
-        ]
+        diseases = []
+
+        for doc in diseases_docs:
+            disease_data = doc.to_dict()
+            if not disease_data:
+                continue
+            response_data = {
+                **disease_data,
+                "id": doc.id,
+                "categories_name": disease_data.get("categories").keys(),
+            }
+            diseases.append(DiseaseResponse(**response_data))
+
         next_cursor = diseases_docs[-1].id if len(diseases_docs) == limit else None
 
         return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor)
@@ -181,9 +184,7 @@ async def get_disease_by_id(disease_id: str):
     dependencies=[Depends(verify_is_admin)],
 )
 @cache(300)
-async def update_disease(
-    disease_id: str, updated_disease: DiseaseUpdate
-):  
+async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
     try:
         if not updated_disease.model_dump(exclude_unset=True):
             raise HTTPException(
