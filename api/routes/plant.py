@@ -276,6 +276,7 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
 @router.delete(
     "/{plant_id}",
     response_model=SuccessResponse,
+    dependencies=[Depends(verify_is_admin)],
 )
 @cache(300)
 async def delete_plant(plant_id: str):

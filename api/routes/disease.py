@@ -171,7 +171,17 @@ async def get_disease_by_id(disease_id: str):
             )
 
         disease_data = disease_doc.to_dict()
-        response_data = {**disease_data, "id": disease_doc.id}
+        if not disease_data:
+            raise HTTPException(status_code=404, detail="Data penyakit rusak.")
+
+        cat_dict = disease_data.get("categories")
+        cat_names = cat_dict.keys() if cat_dict is not None else None
+
+        response_data = {
+            **disease_data,
+            "id": disease_doc.id,
+            "categories_name": cat_names,
+        }
 
         return DiseaseResponse(**response_data)
     except Exception as e:
