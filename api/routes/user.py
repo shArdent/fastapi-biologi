@@ -6,10 +6,11 @@ from google.cloud.firestore_v1 import (
 from firebase_admin import auth
 
 from db.firestore import db
-from schemas.users import User, UserUpdate
+from schemas.users import User, UserResponse, UserUpdate
 from schemas.my_plants import (
     SuccessResponse,
 )
+from utils.middlewares.verify_is_admin import verify_is_admin
 from utils.middlewares.verify_token import verify_firebase_token
 from constants.collection_name import (
     FIRESTORE_COLLECTION_USERS,
@@ -50,7 +51,7 @@ async def register_user(profile: User, user=Depends(verify_firebase_token)):
                 "username": profile.username,
                 "fullname": profile.fullname,
                 "phone": profile.phone,
-                "createdAt": SERVER_TIMESTAMP,
+                "created_at": SERVER_TIMESTAMP,
                 "role": "user",
             }
         )
@@ -141,4 +142,34 @@ async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_toke
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Gagal mengupdate data: {e}",
+        )
+
+
+@router.get(
+    "/",
+    response_model=list[UserResponse],
+    # dependencies=[Depends(verify_is_admin)]
+)
+async def get_all_user():
+    try:
+        users_ref = db.collection(FIRESTORE_COLLECTION_USERS).stream()
+
+        users = []
+        async for user in users_ref:
+            user_data = user.to_dict()
+            if user_data:
+                ts = user_data.get("created_at")
+                user_data["created_at"] = ts.isoformat()
+                print(user_data)    
+                users.append(UserResponse(**user_data))
+
+        return users
+
+    except HTTPException as he:
+        raise he
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal melakukan registrasi: {e}",
         )

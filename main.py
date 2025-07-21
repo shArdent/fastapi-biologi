@@ -37,9 +37,9 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup():
-    MODEL_PATH = os.getenv("MODEL_PATH")
-    download_model(MODEL_PATH)
-    load_model(MODEL_PATH)
+    # MODEL_PATH = os.getenv("MODEL_PATH")
+    # download_model(MODEL_PATH)
+    # load_model(MODEL_PATH)
     redis_client = redis.Redis(
         host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT")
     )

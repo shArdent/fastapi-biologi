@@ -13,3 +13,9 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     fullname: Optional[str] = None
     phone: Optional[str] = None
+
+
+class UserResponse(User):
+    created_at: str
+    role: str
+    uid: str
