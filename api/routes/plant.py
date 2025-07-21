@@ -117,13 +117,14 @@ async def get_all_plants(
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
         base_query = plants_ref
 
+
+        query_for_page = base_query.order_by("__name__")
+
         if category_name:
-            print(category_name)
             base_query = base_query.where(
                 filter=FieldFilter(f"categories.`{category_name}`", "!=", None)
             )
 
-        query_for_page = base_query
 
         if start_after_doc_id:
             start_doc_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(

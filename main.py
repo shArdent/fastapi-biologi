@@ -4,10 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as redis
-import gdown
 
 import os
-import requests
 
 from api.main import api_router
 from utils.key_builder import no_auth_header_key_builder
