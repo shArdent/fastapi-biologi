@@ -1,10 +1,10 @@
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud.firestore_v1 import (
     Increment,
     FieldFilter,
 )
 from typing import Optional
+from fastapi_cache.decorator import cache
 
 from db.firestore import db
 from constants.collection_name import (
@@ -32,13 +32,11 @@ router = APIRouter(prefix="/plants", tags=["plants"])
     status_code=201,
     dependencies=[Depends(verify_is_admin)],
 )
+@cache(300)
 async def add_new_plant(new_plant: PlantCreate):
     try:
         plant_id = slugify(new_plant.name)
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
-        category_ref = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
-            new_plant.category_id
-        )
 
         if (await plant_ref.get()).exists:
             raise HTTPException(
@@ -46,37 +44,48 @@ async def add_new_plant(new_plant: PlantCreate):
                 detail=f"Tanaman dengan nama '{new_plant.name}' sudah ada.",
             )
 
-        category_doc = await category_ref.get()
-        if not category_doc.exists:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Kategori dengan ID '{new_plant.category_id}' tidak ditemukan.",
-            )
-
-        category_data = category_doc.to_dict()
-
-        if not category_data:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Data untuk kategori '{new_plant.category_id}' kosong atau korup.",
-            )
-
-        category_name = category_data.get("name")
-
-        data_to_save = new_plant.model_dump()
-        data_to_save.pop("category_id")
-        data_to_save["category_ref"] = category_ref
-        data_to_save["category_name"] = category_name
-
-        tasks = [
-            plant_ref.set(data_to_save),
-            db.collection(FIRESTORE_COLLECTION_PLANTS)
-            .document(FIRESTORE_DOCUMENT_METADATA)
-            .set({"total_items": Increment(1)}, merge=True),
-            category_ref.set({"plant_count": Increment(1)}, merge=True),
+        category_refs = [
+            db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(cat_id)
+            for cat_id in new_plant.categories_id
         ]
 
-        await asyncio.gather(*tasks)
+        category_docs = [doc async for doc in db.get_all(category_refs)]
+
+        categories_to_save = {}
+        validated_category_refs = []
+
+        for doc in category_docs:
+            if not doc.exists:
+                raise HTTPException(
+                    status_code=404, detail="Terdapat ID kategori yang tidak ditemukan"
+                )
+
+            category_data = doc.to_dict()
+            category_name = (
+                category_data.get("name") if category_data is not None else None
+            )
+            categories_to_save[category_name] = doc.reference
+
+            validated_category_refs.append(doc.reference)
+
+        batch = db.batch()
+
+        data_to_save = new_plant.model_dump()
+        data_to_save.pop("categories_id")
+        data_to_save["categories"] = categories_to_save
+
+        batch.set(plant_ref, data_to_save)
+
+        metadata_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
+            FIRESTORE_DOCUMENT_METADATA
+        )
+
+        batch.set(metadata_ref, {"total_items": Increment(1)}, merge=True)
+
+        for cat_ref in validated_category_refs:
+            batch.update(cat_ref, {"plant_count": Increment(1)})
+
+        await batch.commit()
 
         return SuccessResponse(message="Tanaman berhasil ditambahkan")
     except HTTPException as he:
@@ -90,30 +99,31 @@ async def add_new_plant(new_plant: PlantCreate):
 @router.get(
     "/",
     response_model=PlantsCursorResponse,
-    dependencies=[Depends(verify_firebase_token)],
+    # dependencies=[Depends(verify_firebase_token)],
 )
+@cache(300)
 async def get_all_plants(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(
         None, description="ID dokumen terakhir dari halaman sebelumnya"
     ),
-    category_id: Optional[str] = Query(
-        None, description="Filter tanaman berdasarkan ID Kategori"
+    category_name: Optional[str] = Query(
+        None,
+        description="Filter tanaman berdasarkan ID Kategori",
+        example="Tanaman Pangan",
     ),
 ):
     try:
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
         base_query = plants_ref
 
-        if category_id:
-            category_ref = db.collection(
-                FIRESTORE_COLLECTION_PLANT_CATEGORIES
-            ).document(category_id)
+        if category_name:
+            print(category_name)
             base_query = base_query.where(
-                filter=FieldFilter("category_ref", "==", category_ref)
+                filter=FieldFilter(f"categories.`{category_name}`", "!=", None)
             )
 
-        query_for_page = base_query.order_by("__name__")
+        query_for_page = base_query
 
         if start_after_doc_id:
             start_doc_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
@@ -138,7 +148,11 @@ async def get_all_plants(
             if not plant_data:
                 continue
 
-            response_data = {**plant_data, "id": doc.id}
+            response_data = {
+                **plant_data,
+                "id": doc.id,
+                "categories_name": plant_data.get("categories").keys(),
+            }
             plants.append(PlantResponse(**response_data))
 
         next_cursor = plants_docs[-1].id
@@ -159,6 +173,7 @@ async def get_all_plants(
     response_model=PlantResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(300)
 async def get_plant_by_id(plant_id: str):
     try:
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
@@ -170,10 +185,10 @@ async def get_plant_by_id(plant_id: str):
         if not plant_data:
             raise HTTPException(status_code=404, detail="Data tanaman kosong.")
 
-        response_data = {
-            **plant_data,
-            "id": plant_doc.id,
-        }
+        cat_dict = plant_data.get("categories")
+        cat_names = cat_dict.keys() if cat_dict is not None else None
+
+        response_data = {**plant_data, "id": plant_doc.id, "categories_name": cat_names}
         return PlantResponse(**response_data)
     except HTTPException as he:
         raise he
@@ -186,53 +201,86 @@ async def get_plant_by_id(plant_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
+@cache(300)
 async def update_plant(plant_id: str, updated_plant: PlantUpdate):
     try:
-        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
-        if not (await plant_ref.get()).exists:
-            raise HTTPException(status_code=404, detail="Tanaman tidak ditemukan.")
-
-        update_data = updated_plant.model_dump(exclude_unset=True)
-        if not update_data:
+        if not updated_plant.model_dump(exclude_unset=True):
             raise HTTPException(
                 status_code=400, detail="Tidak ada data untuk diperbarui."
             )
 
-        if "category_id" in update_data:
-            category_id = update_data.pop("category_id")
-            category_ref = db.collection(
-                FIRESTORE_COLLECTION_PLANT_CATEGORIES
-            ).document(category_id)
-            category_doc = await category_ref.get()
-            if not category_doc.exists:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Kategori dengan ID '{category_id}' tidak ditemukan.",
-                )
+        plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
 
-            category_data = category_doc.to_dict()
-            if not category_data:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Data untuk kategori '{category_id}' kosong atau korup.",
-                )
+        snapshot = await plant_ref.get()
+        if not snapshot.exists:
+            raise HTTPException(status_code=404, detail="Tanaman tidak ditemukan.")
 
-            update_data["category_ref"] = category_ref
-            update_data["category_name"] = category_data.get("name")
+        existing_data = snapshot.to_dict()
+        update_data = updated_plant.model_dump(exclude_unset=True)
 
-        await plant_ref.update(update_data)
-        return SuccessResponse(message="Tanaman berhasil diperbarui")
+        # 2. Handle jika ada pembaruan kategori
+        if "categories_id" in update_data:
+            new_category_ids = update_data.pop("categories_id")
+
+            # Ambil referensi kategori lama dari data yang ada
+            old_categories_map = (
+                existing_data.get("categories", {}) if existing_data else {}
+            )
+            old_category_refs = set(old_categories_map.values())
+
+            # Ambil data kategori baru
+            new_category_refs_map = {}
+            if new_category_ids:
+                cat_refs_to_fetch = [
+                    db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
+                        cat_id
+                    )
+                    for cat_id in new_category_ids
+                ]
+                # get_all bisa dijalankan di dalam transaksi
+                new_category_docs = [doc async for doc in db.get_all(cat_refs_to_fetch)]
+
+                for doc in new_category_docs:
+                    if doc.exists:
+                        cat_data = doc.to_dict()
+                        if not cat_data:
+                            raise HTTPException(
+                                status_code=404,
+                                detail="Satu atau lebih ID kategori baru tidak ditemukan.",
+                            )
+                        new_category_refs_map[cat_data.get("name")] = doc.reference
+                    else:
+                        raise HTTPException(
+                            status_code=404,
+                            detail="Satu atau lebih ID kategori baru tidak ditemukan.",
+                        )
+
+            new_category_refs = set(new_category_refs_map.values())
+            update_data["categories"] = new_category_refs_map  # Siapkan untuk update
+
+            refs_to_increment = new_category_refs - old_category_refs
+            refs_to_decrement = old_category_refs - new_category_refs
+
+            for ref in refs_to_increment:
+                await ref.update({"plant_count": Increment(1)})
+
+            for ref in refs_to_decrement:
+                await ref.update({"plant_count": Increment(-1)})
+
+            return SuccessResponse(message="Tanaman berhasil diperbarui")
     except HTTPException as he:
         raise he
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, detail=f"Gagal memperbarui tanaman: {str(e)}"
+        )
 
 
 @router.delete(
     "/{plant_id}",
     response_model=SuccessResponse,
-    dependencies=[Depends(verify_is_admin)],
 )
+@cache(300)
 async def delete_plant(plant_id: str):
     try:
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
@@ -243,21 +291,22 @@ async def delete_plant(plant_id: str):
                 status_code=404,
                 detail=f"Tanaman dengan nama {plant_id} tidak ditemukan",
             )
+        batch = db.batch()
+
+        batch.delete(plant_ref)
+
+        metadata_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
+            FIRESTORE_DOCUMENT_METADATA
+        )
+        batch.update(metadata_ref, {"total_items": Increment(-1)})
 
         plant_data = plant_doc.to_dict()
-        category_ref = plant_data.get("category_ref") if plant_data else None
+        categories_map = plant_data.get("categories") if plant_data else None
+        if categories_map:
+            for category_ref in categories_map.values():
+                batch.update(category_ref, {"plant_count": Increment(-1)})
 
-        tasks = [
-            plant_ref.delete(),
-            db.collection(FIRESTORE_COLLECTION_PLANTS)
-            .document(FIRESTORE_DOCUMENT_METADATA)
-            .update({"total_items": Increment(-1)}),
-        ]
-
-        if category_ref:
-            tasks.append(category_ref.update({"plant_count": Increment(-1)}))
-
-        await asyncio.gather(*tasks)
+        await batch.commit()
 
         return SuccessResponse(message="Tanaman berhasil dihapus")
 

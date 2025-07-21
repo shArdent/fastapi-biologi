@@ -45,7 +45,7 @@ class PlantBase(BaseModel):
 
 
 class PlantCreate(PlantBase):
-    category_id: str = Field(
+    categories_id: list[str] = Field(
         ..., description="ID/slug dari kategori tanaman, contoh: 'tanaman-obat'"
     )
 
@@ -59,11 +59,11 @@ class PlantUpdate(BaseModel):
     characteristics: Optional[Characteristics] = None
     grow_information: Optional[GrowInformation] = None
     use: Optional[str] = None
-    category_id: Optional[str] = None
+    categories_id: Optional[list[str]] = None
 
 
 class PlantResponse(PlantBase):
-    category_name: str
+    categories_name: list[str]
     id: str
 
 
