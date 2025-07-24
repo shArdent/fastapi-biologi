@@ -1,6 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
 
+from constants.cache_time import CACHE_TIME
 from constants.collection_name import FIRESTORE_COLLECTION_DISEASE_CATEGORIES
 from schemas.default_success import SuccessResponse
 from schemas.disease_categories import (
@@ -37,6 +40,7 @@ async def add_disease_category(category_data: DiseaseCategoryCreate):
             )
 
         await category_ref.set(category_data.model_dump())
+        await FastAPICache.clear()
         return SuccessResponse(message="Kategori penyakit berhasil ditambahkan.")
     except HTTPException as he:
         raise he
@@ -49,6 +53,7 @@ async def add_disease_category(category_data: DiseaseCategoryCreate):
     response_model=List[DiseaseCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(CACHE_TIME)
 async def get_all_disease_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).stream()
@@ -69,6 +74,7 @@ async def get_all_disease_categories():
     response_model=DiseaseCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(CACHE_TIME)
 async def get_disease_category_by_id(category_id: str):
     try:
         doc = await (
@@ -118,6 +124,7 @@ async def update_disease_category(
             )
 
         await category_ref.update(update_data)
+        await FastAPICache.clear()
 
         return SuccessResponse(message="Kategori penyakit berhasil diperbarui.")
     except HTTPException as he:
@@ -140,6 +147,7 @@ async def delete_disease_category(category_id: str):
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
         await category_ref.delete()
+        await FastAPICache.clear()
         return SuccessResponse(message="Kategori penyakit berhasil dihapus.")
     except HTTPException as he:
         raise he

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi_cache import FastAPICache
 from google.cloud.firestore_v1 import (
     Increment,
     FieldFilter,
@@ -6,6 +7,7 @@ from google.cloud.firestore_v1 import (
 from typing import Optional
 from fastapi_cache.decorator import cache
 
+from constants.cache_time import CACHE_TIME
 from db.firestore import db
 from constants.collection_name import (
     FIRESTORE_COLLECTION_PLANT_CATEGORIES,
@@ -32,7 +34,6 @@ router = APIRouter(prefix="/plants", tags=["plants"])
     status_code=201,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(300)
 async def add_new_plant(new_plant: PlantCreate):
     try:
         plant_id = slugify(new_plant.name)
@@ -87,6 +88,8 @@ async def add_new_plant(new_plant: PlantCreate):
 
         await batch.commit()
 
+        await FastAPICache.clear()
+
         return SuccessResponse(message="Tanaman berhasil ditambahkan")
     except HTTPException as he:
         raise he
@@ -101,7 +104,7 @@ async def add_new_plant(new_plant: PlantCreate):
     response_model=PlantsCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(300)
+@cache(CACHE_TIME)
 async def get_all_plants(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(
@@ -172,7 +175,7 @@ async def get_all_plants(
     response_model=PlantResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(300)
+@cache(CACHE_TIME)
 async def get_plant_by_id(plant_id: str):
     try:
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)
@@ -263,6 +266,7 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
                 await ref.update({"plant_count": Increment(-1)})
 
         await plant_ref.update(update_data)
+        await FastAPICache.clear()
         return SuccessResponse(message="Tanaman berhasil diperbarui")
 
     except HTTPException as he:
@@ -304,6 +308,7 @@ async def delete_plant(plant_id: str):
                 batch.update(category_ref, {"plant_count": Increment(-1)})
 
         await batch.commit()
+        await FastAPICache.clear()
 
         return SuccessResponse(message="Tanaman berhasil dihapus")
 

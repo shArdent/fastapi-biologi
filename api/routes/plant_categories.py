@@ -1,6 +1,9 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi_cache import FastAPICache
+from fastapi_cache.decorator import cache
 
+from constants.cache_time import CACHE_TIME
 from constants.collection_name import FIRESTORE_COLLECTION_PLANT_CATEGORIES
 from schemas.default_success import SuccessResponse
 from schemas.plant_categories import (
@@ -37,6 +40,7 @@ async def add_plant_category(category_data: PlantCategoryCreate):
             )
 
         await category_ref.set(category_data.model_dump())
+        await FastAPICache.clear()
         return SuccessResponse(message="Kategori tanaman berhasil ditambahkan.")
 
     except HTTPException as he:
@@ -50,6 +54,7 @@ async def add_plant_category(category_data: PlantCategoryCreate):
     response_model=List[PlantCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(CACHE_TIME)
 async def get_all_plant_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).stream()
@@ -71,6 +76,7 @@ async def get_all_plant_categories():
     response_model=PlantCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
+@cache(CACHE_TIME)
 async def get_plant_category_by_id(category_id: str):
     try:
         doc = await (
@@ -118,6 +124,7 @@ async def update_plant_category(category_id: str, category_update: PlantCategory
             )
 
         await category_ref.update(update_data)
+        await FastAPICache.clear()
 
         return SuccessResponse(message="Kategori tanaman berhasil diperbarui.")
     except HTTPException as he:
@@ -140,6 +147,7 @@ async def delete_plant_category(category_id: str):
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
         await category_ref.delete()
+        await FastAPICache.clear()
         return SuccessResponse(message="Kategori tanaman berhasil dihapus.")
     except HTTPException as he:
         raise he
