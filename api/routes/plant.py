@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from google.cloud.firestore_v1 import ( Increment,
+from google.cloud.firestore_v1 import (
+    Increment,
     FieldFilter,
 )
 from typing import Optional
@@ -116,14 +117,12 @@ async def get_all_plants(
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
         base_query = plants_ref
 
-
         query_for_page = base_query.order_by("__name__")
 
         if category_name:
             base_query = base_query.where(
                 filter=FieldFilter(f"categories.`{category_name}`", "!=", None)
             )
-
 
         if start_after_doc_id:
             start_doc_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
@@ -201,7 +200,6 @@ async def get_plant_by_id(plant_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(300)
 async def update_plant(plant_id: str, updated_plant: PlantUpdate):
     try:
         if not updated_plant.model_dump(exclude_unset=True):
@@ -264,7 +262,9 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
             for ref in refs_to_decrement:
                 await ref.update({"plant_count": Increment(-1)})
 
-            return SuccessResponse(message="Tanaman berhasil diperbarui")
+        await plant_ref.update(update_data)
+        return SuccessResponse(message="Tanaman berhasil diperbarui")
+
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -278,7 +278,6 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(300)
 async def delete_plant(plant_id: str):
     try:
         plant_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(plant_id)

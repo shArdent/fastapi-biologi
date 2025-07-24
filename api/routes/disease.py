@@ -193,7 +193,6 @@ async def get_disease_by_id(disease_id: str):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(300)
 async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
     try:
         if not updated_disease.model_dump(exclude_unset=True):
@@ -237,6 +236,9 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
                 ref.update({"disease_count": Increment(1)})
             for ref in old_refs - new_refs:
                 ref.update({"disease_count": Increment(-1)})
+
+        await disease_ref.update(update_data)
+
         return SuccessResponse(message="Penyakit berhasil diperbarui")
     except HTTPException as he:
         raise he
@@ -249,7 +251,6 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
     response_model=SuccessResponse,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(300)
 async def delete_disease(disease_id: str):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
