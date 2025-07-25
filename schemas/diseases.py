@@ -11,7 +11,7 @@ class DiseaseBase(BaseModel):
     causes: str
     treatments: str
     latin_name: str
-    images: Optional[list[str]]
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
 class DiseaseCreate(DiseaseBase):
@@ -29,7 +29,7 @@ class DiseaseUpdate(BaseModel):
     causes: Optional[str] = None
     treatments: Optional[str] = None
     categories_id: Optional[list[str]] = None
-    images: Optional[list[str]] = None
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
 class DiseaseResponse(DiseaseBase):

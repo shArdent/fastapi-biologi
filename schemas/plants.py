@@ -41,7 +41,7 @@ class PlantBase(BaseModel):
     characteristics: Characteristics
     grow_information: GrowInformation
     use: str
-    images: Optional[list[str]]
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
 class PlantCreate(PlantBase):
@@ -60,6 +60,7 @@ class PlantUpdate(BaseModel):
     grow_information: Optional[GrowInformation] = None
     use: Optional[str] = None
     categories_id: Optional[list[str]] = None
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
 class PlantResponse(PlantBase):

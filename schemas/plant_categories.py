@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 class PlantCategoryBase(BaseModel):
     name: str = Field(..., description="Nama kategori tanaman, contoh: Tanaman Obat")
     description: Optional[str] = Field(None, description="Deskripsi singkat kategori")
-    images: Optional[list[str]]
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
     plant_count: int = Field(
         0,
         description="Jumlah tanaman dalam kategori ini (dikelola otomatis).",
@@ -20,7 +20,7 @@ class PlantCategoryCreate(PlantCategoryBase):
 class PlantCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
-    images: Optional[list[str]] = None
+    images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
 class PlantCategoryResponse(PlantCategoryBase):
