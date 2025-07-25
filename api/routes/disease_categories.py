@@ -1,9 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi_cache import FastAPICache
-from fastapi_cache.decorator import cache
 
-from constants.cache_time import CACHE_TIME
 from constants.collection_name import FIRESTORE_COLLECTION_DISEASE_CATEGORIES
 from schemas.default_success import SuccessResponse
 from schemas.disease_categories import (
@@ -53,7 +50,6 @@ async def add_disease_category(category_data: DiseaseCategoryCreate):
     response_model=List[DiseaseCategoryResponse],
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(CACHE_TIME)
 async def get_all_disease_categories():
     try:
         docs = db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).stream()
@@ -74,7 +70,6 @@ async def get_all_disease_categories():
     response_model=DiseaseCategoryResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(CACHE_TIME)
 async def get_disease_category_by_id(category_id: str):
     try:
         doc = await (

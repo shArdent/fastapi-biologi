@@ -1,12 +1,11 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi_cache import FastAPICache
+from fastapi.security import base
 from google.cloud.firestore_v1 import (
     FieldFilter,
     Increment,
 )
 from typing import Optional
-from fastapi_cache.decorator import cache
 
 from db.firestore import db
 from constants.collection_name import (
@@ -24,7 +23,6 @@ from schemas.default_success import SuccessResponse
 from utils.middlewares.verify_is_admin import verify_is_admin
 from utils.middlewares.verify_token import verify_firebase_token
 from utils.slugify import slugify
-from constants.cache_time import CACHE_TIME
 
 router = APIRouter(prefix="/diseases", tags=["diseases"])
 
@@ -35,7 +33,6 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
     status_code=201,
     dependencies=[Depends(verify_is_admin)],
 )
-@cache(CACHE_TIME)
 async def add_new_disease(new_disease: DiseaseCreate):
     try:
         disease_id = slugify(new_disease.name)
@@ -97,17 +94,16 @@ async def add_new_disease(new_disease: DiseaseCreate):
     response_model=DiseasesCursorResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(CACHE_TIME)
 async def get_all_diseases(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(None),
     category_id: Optional[str] = Query(None),
+    plant_name: Optional[str] = Query(None, description="Nama tanaman"),
 ):
     try:
         base_query = db.collection(FIRESTORE_COLLECTION_DISEASES)
 
         if category_id:
-            print(category_id)
             category_ref = db.collection(
                 FIRESTORE_COLLECTION_DISEASE_CATEGORIES
             ).document(category_id)
@@ -120,6 +116,11 @@ async def get_all_diseases(
                     )
             else:
                 return DiseasesCursorResponse(diseases=[], next_cursor=None)
+
+        if plant_name:
+            base_query = base_query.where(
+                filter=FieldFilter("plants_listed", "array_contains", plant_name)
+            )
 
         query_for_page = base_query.order_by("__name__")
         if start_after_doc_id:
@@ -161,7 +162,6 @@ async def get_all_diseases(
     response_model=DiseaseResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-@cache(CACHE_TIME)
 async def get_disease_by_id(disease_id: str):
     try:
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)

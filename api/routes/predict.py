@@ -1,4 +1,5 @@
 import io
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -24,11 +25,25 @@ from utils.slugify import slugify
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
+concurrent_limit = asyncio.Semaphore(20)
+
+
+async def try_acquire(sem: asyncio.Semaphore, timeout=0.01) -> bool:
+    try:
+        await asyncio.wait_for(sem.acquire(), timeout=timeout)
+        return True
+    except asyncio.TimeoutError:
+        return False
+
 
 @router.post(
     "/", response_model=PredictResponse, dependencies=[Depends(verify_firebase_token)]
 )
 async def predict_image(file: UploadFile = File(...)):
+    acquired = await try_acquire(concurrent_limit)
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Server sedang sibuk, silakan coba lagi nanti.")
+
     try:
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
@@ -54,8 +69,6 @@ async def predict_image(file: UploadFile = File(...)):
             predicted_class
         )
 
-        print(plant_name)
-
         cam_base64 = None
         if not is_healthy:
             heatmap = get_gradcam_heatmap(
@@ -74,6 +87,8 @@ async def predict_image(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during prediction: {e}")
+    finally:
+        concurrent_limit.release()
 
 
 @router.get(

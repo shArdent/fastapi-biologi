@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
+
+# from fastapi_cache import FastAPICache
+# from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as redis
+from contextlib import asynccontextmanager
 
 import os
 
@@ -13,10 +15,28 @@ from utils.load_model import download_model, load_model
 
 load_dotenv()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    MODEL_PATH = os.getenv("MODEL_PATH")
+    download_model(MODEL_PATH)
+    load_model(MODEL_PATH)
+    # redis_client = redis.Redis(
+    #     host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT")
+    # )
+    # FastAPICache.init(
+    #     RedisBackend(redis_client),
+    #     prefix="fastapi-cache",
+    #     key_builder=no_auth_header_key_builder,
+    # )
+    yield
+
+
 app = FastAPI(
     title="API Deteksi Penyakit Tanaman",
     description="API Project penelitian biologi deteksi penyakit & hama tanaman",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -33,21 +53,6 @@ app.add_middleware(
     allow_methods=["*"],  # atau ["GET", "POST", ...]
     allow_headers=["*"],  # atau header tertentu: ["Authorization", "Content-Type"]
 )
-
-
-@app.on_event("startup")
-async def startup():
-    # MODEL_PATH = os.getenv("MODEL_PATH")
-    # download_model(MODEL_PATH)
-    # load_model(MODEL_PATH)
-    redis_client = redis.Redis(
-        host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT")
-    )
-    FastAPICache.init(
-        RedisBackend(redis_client),
-        prefix="fastapi-cache",
-        key_builder=no_auth_header_key_builder,
-    )
 
 
 app.include_router(api_router, prefix="/api")
