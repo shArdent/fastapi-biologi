@@ -19,3 +19,11 @@ class UserResponse(User):
     created_at: str
     role: str
     uid: str
+
+
+class PasswordReq(BaseModel):
+    password: str
+
+
+class EmailReq(BaseModel):
+    email: str

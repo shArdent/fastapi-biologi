@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 class DiseaseCategoryBase(BaseModel):
     name: str = Field(..., description="Nama kategori penyakit, contoh: Penyakit Jamur")
     description: Optional[str] = Field(None, description="Deskripsi singkat kategori")
+    images: Optional[list[str]]
     disease_count: int = Field(
         0,
         description="Jumlah penyakit dalam kategori ini (dikelola otomatis).",
@@ -19,6 +20,7 @@ class DiseaseCategoryCreate(DiseaseCategoryBase):
 class DiseaseCategoryUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    images: Optional[list[str]] = None
 
 
 class DiseaseCategoryResponse(DiseaseCategoryBase):

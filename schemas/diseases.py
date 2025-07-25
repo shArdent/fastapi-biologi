@@ -11,6 +11,7 @@ class DiseaseBase(BaseModel):
     causes: str
     treatments: str
     latin_name: str
+    images: Optional[list[str]]
 
 
 class DiseaseCreate(DiseaseBase):
@@ -28,6 +29,7 @@ class DiseaseUpdate(BaseModel):
     causes: Optional[str] = None
     treatments: Optional[str] = None
     categories_id: Optional[list[str]] = None
+    images: Optional[list[str]] = None
 
 
 class DiseaseResponse(DiseaseBase):

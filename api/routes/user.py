@@ -2,11 +2,18 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from google.cloud.exceptions import GoogleCloudError
 from google.cloud.firestore_v1 import (
     SERVER_TIMESTAMP,
+    FieldFilter,
 )
 from firebase_admin import auth
 
 from db.firestore import db
-from schemas.users import User, UserResponse, UserUpdate
+from schemas.users import (
+    EmailReq,
+    PasswordReq,
+    User,
+    UserResponse,
+    UserUpdate,
+)
 from schemas.my_plants import (
     SuccessResponse,
 )
@@ -102,10 +109,8 @@ async def register_admin(user=Depends(verify_firebase_token)):
         )
 
 
-@router.patch("/", response_model=SuccessResponse)
-async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_token)):
-    uid = user.get("uid")
-
+@router.patch("/{uid}", response_model=SuccessResponse, dependencies=[Depends(verify_firebase_token)])
+async def update_user(update_data: UserUpdate, uid=str):
     if not update_data.model_dump(exclude_unset=True):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -122,7 +127,7 @@ async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_toke
 
         if update_data.username:
             existing = (
-                db.collection(FIRESTORE_COLLECTION_USERS)
+                await db.collection(FIRESTORE_COLLECTION_USERS)
                 .where("username", "==", update_data.username)
                 .where("uid", "!=", uid)
                 .limit(1)
@@ -137,6 +142,77 @@ async def update_user(update_data: UserUpdate, user=Depends(verify_firebase_toke
         await doc_ref.update(update_data.model_dump(exclude_unset=True))
 
         return SuccessResponse(message="Profile berhasil diupdate")
+
+    except GoogleCloudError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengupdate data: {e}",
+        )
+
+
+@router.patch("/email/{uid}", dependencies=[Depends(verify_firebase_token)])
+async def update_email(payload: EmailReq, uid:str):
+    if not payload.model_dump(exclude_unset=True):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tidak ada data yang dikirim untuk diupdate",
+        )
+
+    try:
+        doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(uid)
+
+        if not (await doc_ref.get()).exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User belum terdaftar"
+            )
+
+        if payload.email:
+            existing = (
+                await db.collection(FIRESTORE_COLLECTION_USERS)
+                .where(filter=FieldFilter("email", "!=", payload.email))
+                .where(filter=FieldFilter("uid", "!=", uid))
+                .limit(1)
+                .get()
+            )
+
+            print(existing)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email sudah digunakan oleh user lain",
+                )
+        auth.update_user(uid=uid, email=payload.email)
+
+        await doc_ref.update(payload.model_dump(exclude_unset=True))
+
+        return SuccessResponse(message="Email berhasil diupdate")
+
+    except GoogleCloudError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal mengupdate data: {e}",
+        )
+
+
+@router.patch("/password/{uid}")
+async def update_password(payload: PasswordReq, uid:str):
+    if not payload.model_dump(exclude_unset=True):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tidak ada data yang dikirim untuk diupdate",
+        )
+
+    try:
+        doc_ref = db.collection(FIRESTORE_COLLECTION_USERS).document(uid)
+
+        if not (await doc_ref.get()).exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User belum terdaftar"
+            )
+
+        auth.update_user(uid=uid, password=payload.password)
+
+        return SuccessResponse(message="Email berhasil diupdate")
 
     except GoogleCloudError as e:
         raise HTTPException(
@@ -173,14 +249,14 @@ async def get_all_user():
 
 
 @router.get(
-    "/{user_id}",
+    "/{uid}",
     response_model=UserResponse,
     dependencies=[Depends(verify_firebase_token)],
 )
-async def get_user_by_id(user_id: str):
+async def get_user_by_id(uid: str):
     try:
         user_doc = (
-            await db.collection(FIRESTORE_COLLECTION_USERS).document(user_id).get()
+            await db.collection(FIRESTORE_COLLECTION_USERS).document(uid).get()
         )
 
         if not user_doc.exists:
