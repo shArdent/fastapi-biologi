@@ -110,7 +110,7 @@ async def register_admin(user=Depends(verify_firebase_token)):
 
 
 @router.patch("/{uid}", response_model=SuccessResponse, dependencies=[Depends(verify_firebase_token)])
-async def update_user(update_data: UserUpdate, uid=str):
+async def update_user(update_data: UserUpdate, uid:str):
     if not update_data.model_dump(exclude_unset=True):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -169,13 +169,12 @@ async def update_email(payload: EmailReq, uid:str):
         if payload.email:
             existing = (
                 await db.collection(FIRESTORE_COLLECTION_USERS)
-                .where(filter=FieldFilter("email", "!=", payload.email))
+                .where(filter=FieldFilter("email", "==", payload.email))
                 .where(filter=FieldFilter("uid", "!=", uid))
                 .limit(1)
                 .get()
             )
 
-            print(existing)
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
