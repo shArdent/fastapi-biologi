@@ -194,7 +194,7 @@ async def update_email(payload: EmailReq, uid:str):
         )
 
 
-@router.patch("/password/{uid}")
+@router.patch("/password/{uid}", dependencies=[Depends(verify_firebase_token)],)
 async def update_password(payload: PasswordReq, uid:str):
     if not payload.model_dump(exclude_unset=True):
         raise HTTPException(
