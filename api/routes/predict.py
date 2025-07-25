@@ -2,7 +2,7 @@ import io
 import asyncio
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, Request
 from PIL import Image
 import numpy as np
 
@@ -20,7 +20,6 @@ from constants.collection_name import (
 )
 from constants.labels import class_names
 from utils.preprocess_image import preprocess_image
-from utils.load_model import env2, base_env2
 from utils.slugify import slugify
 
 router = APIRouter(prefix="/predict", tags=["predict"])
@@ -39,17 +38,22 @@ async def try_acquire(sem: asyncio.Semaphore, timeout=0.01) -> bool:
 @router.post(
     "/", response_model=PredictResponse, dependencies=[Depends(verify_firebase_token)]
 )
-async def predict_image(file: UploadFile = File(...)):
+async def predict_image(request: Request, file: UploadFile = File(...)):
     acquired = await try_acquire(concurrent_limit)
     if not acquired:
-        raise HTTPException(status_code=503, detail="Server sedang sibuk, silakan coba lagi nanti.")
-
+        raise HTTPException(
+            status_code=503, detail="Server sedang sibuk, silakan coba lagi nanti."
+        )
     try:
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
         img_preprocessed = preprocess_image(image)
 
-        prediction = env2.predict(img_preprocessed)
+        env2 = request.app.state.env2
+
+        loop = asyncio.get_event_loop()
+
+        prediction = await loop.run_in_executor(None, env2.predict, img_preprocessed)
         pred_values = prediction[0]
 
         class_index = int(np.argmax(pred_values))
@@ -71,8 +75,9 @@ async def predict_image(file: UploadFile = File(...)):
 
         cam_base64 = None
         if not is_healthy:
-            heatmap = get_gradcam_heatmap(
-                base_env2, img_preprocessed, "top_conv", class_index
+            grad_model = request.app.state.grad_model
+            heatmap = await loop.run_in_executor(
+                None, get_gradcam_heatmap, grad_model, img_preprocessed, class_index
             )
             cam_image = overlay_bounding_boxes(image, heatmap)
             cam_base64 = image_to_base64(cam_image)
