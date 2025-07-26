@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from schemas.default_success import SuccessResponse
@@ -7,23 +7,18 @@ from schemas.default_success import SuccessResponse
 class MyPlantCreate(BaseModel):
     nickname: str
     plant_id: str
-    disease_id: Optional[str]
+    disease_id: Optional[str] = Field(None)
 
 
 class MyPlantOut(MyPlantCreate):
     id: str
-
-
-class MyPlantSummary(MyPlantOut):
     plant_name: str
-    disease_name: Optional[str]
+    disease_name: Optional[str] = Field(None)
 
 
 class PaginatedMyPlantSummary(BaseModel):
-    data: list[MyPlantSummary]
+    data: list[MyPlantOut]
     last_doc_id: Optional[str] = None
-    total_items: int
-    max_page: int
 
 
 class SuccessCreatePlant(SuccessResponse):
@@ -37,5 +32,5 @@ class MyPlantUpdate(BaseModel):
 
 
 class SuccessUpdatePlant(SuccessResponse):
-    my_plant_id: str
-    updated_data: MyPlantCreate
+    message: str
+    plant: MyPlantOut
