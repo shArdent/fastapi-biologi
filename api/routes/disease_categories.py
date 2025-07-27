@@ -37,7 +37,6 @@ async def add_disease_category(category_data: DiseaseCategoryCreate):
             )
 
         await category_ref.set(category_data.model_dump())
-        await FastAPICache.clear()
         return SuccessResponse(message="Kategori penyakit berhasil ditambahkan.")
     except HTTPException as he:
         raise he
@@ -119,7 +118,6 @@ async def update_disease_category(
             )
 
         await category_ref.update(update_data)
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Kategori penyakit berhasil diperbarui.")
     except HTTPException as he:
@@ -142,7 +140,6 @@ async def delete_disease_category(category_id: str):
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
         await category_ref.delete()
-        await FastAPICache.clear()
         return SuccessResponse(message="Kategori penyakit berhasil dihapus.")
     except HTTPException as he:
         raise he

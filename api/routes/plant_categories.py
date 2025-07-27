@@ -37,7 +37,6 @@ async def add_plant_category(category_data: PlantCategoryCreate):
             )
 
         await category_ref.set(category_data.model_dump())
-        await FastAPICache.clear()
         return SuccessResponse(message="Kategori tanaman berhasil ditambahkan.")
 
     except HTTPException as he:
@@ -119,7 +118,6 @@ async def update_plant_category(category_id: str, category_update: PlantCategory
             )
 
         await category_ref.update(update_data)
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Kategori tanaman berhasil diperbarui.")
     except HTTPException as he:
@@ -142,7 +140,6 @@ async def delete_plant_category(category_id: str):
             raise HTTPException(status_code=404, detail="Kategori tidak ditemukan.")
 
         await category_ref.delete()
-        await FastAPICache.clear()
         return SuccessResponse(message="Kategori tanaman berhasil dihapus.")
     except HTTPException as he:
         raise he

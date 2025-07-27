@@ -1,6 +1,4 @@
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.security import base
 from google.cloud.firestore_v1 import (
     FieldFilter,
     Increment,
@@ -78,7 +76,6 @@ async def add_new_disease(new_disease: DiseaseCreate):
             batch.update(cat_ref, {"disease_count": Increment(1)})
 
         await batch.commit()
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Penyakit berhasil ditambahkan")
     except HTTPException as he:
@@ -241,7 +238,6 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
                 ref.update({"disease_count": Increment(-1)})
 
         await disease_ref.update(update_data)
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Penyakit berhasil diperbarui")
     except HTTPException as he:
@@ -283,7 +279,6 @@ async def delete_disease(disease_id: str):
                 batch.update(cat_ref, {"disease_count": Increment(-1)})
 
         await batch.commit()
-        await FastAPICache.clear()
         return SuccessResponse(message="Penyakit berhasil dihapus")
     except HTTPException as he:
         raise he

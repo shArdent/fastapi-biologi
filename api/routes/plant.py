@@ -85,7 +85,6 @@ async def add_new_plant(new_plant: PlantCreate):
 
         await batch.commit()
 
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Tanaman berhasil ditambahkan")
     except HTTPException as he:
@@ -261,7 +260,6 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
                 await ref.update({"plant_count": Increment(-1)})
 
         await plant_ref.update(update_data)
-        await FastAPICache.clear()
         return SuccessResponse(message="Tanaman berhasil diperbarui")
 
     except HTTPException as he:
@@ -303,7 +301,6 @@ async def delete_plant(plant_id: str):
                 batch.update(category_ref, {"plant_count": Increment(-1)})
 
         await batch.commit()
-        await FastAPICache.clear()
 
         return SuccessResponse(message="Tanaman berhasil dihapus")
 
