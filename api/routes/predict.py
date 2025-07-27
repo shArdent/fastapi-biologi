@@ -77,7 +77,7 @@ async def predict_image(request: Request, file: UploadFile = File(...)):
         if not is_healthy:
             grad_model = request.app.state.grad_model
             heatmap = await loop.run_in_executor(
-                None, get_gradcam_heatmap, grad_model, img_preprocessed, class_index
+                None, get_gradcam_heatmap, grad_model, img_preprocessed, "top_conv", class_index
             )
             cam_image = overlay_bounding_boxes(image, heatmap)
             cam_base64 = image_to_base64(cam_image)

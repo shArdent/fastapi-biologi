@@ -103,7 +103,7 @@ async def add_my_plant(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{user_id}")  # response_model=PaginatedMyPlantSummary)
+@router.get("/{user_id}", response_model=PaginatedMyPlantSummary)
 async def get_all_my_plants(
     user_id: str,
     page_size: int = Query(10, gt=0, le=50),

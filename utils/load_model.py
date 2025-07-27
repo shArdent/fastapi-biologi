@@ -5,10 +5,6 @@ import gdown
 import os
 
 
-env2 = None
-base_env2 = None
-
-
 def load_model(app, path: str):
     global env2
     global base_env2
@@ -22,7 +18,11 @@ def load_model(app, path: str):
     base_env2 = model.layers[0]
 
     conv_layer_name = "top_conv"
-    layer = base_env2.get_layer(conv_layer_name)
+
+    try:
+        layer = base_env2.get_layer(conv_layer_name)
+    except Exception as e:
+        print(e)
 
     app.state.grad_model = tf.keras.models.Model(
         [base_env2.input], [layer.output, base_env2.output]
