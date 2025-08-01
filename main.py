@@ -20,7 +20,7 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     MODEL_PATH = os.getenv("MODEL_PATH")
     download_model(MODEL_PATH)
-    load_model(app, MODEL_PATH)
+    # load_model(app, MODEL_PATH)
     # redis_client = redis.Redis(
     #     host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT")
     # )

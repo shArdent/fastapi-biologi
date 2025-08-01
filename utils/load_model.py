@@ -9,7 +9,9 @@ def load_model(app, path: str):
     global env2
     global base_env2
 
+    print(f"Loading model from: {path}")
     model = tf.keras.models.load_model(path)
+    model.summary()
 
     if model is None:
         raise ValueError("Model gagal dimuat.")

@@ -5,7 +5,7 @@ firebase-admin
 python-multipart
 python-dotenv
 opencv-python-headless
-tensorflow-cpu
+tensorflow-cpu==2.18
 pillow
 gdown
 imagekitio
