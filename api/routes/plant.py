@@ -49,7 +49,7 @@ async def add_new_plant(new_plant: PlantCreate):
 
         category_docs = [doc async for doc in db.get_all(category_refs)]
 
-        categories_to_save = {}
+        categories_to_save = []
         validated_category_refs = []
 
         for doc in category_docs:
@@ -60,9 +60,9 @@ async def add_new_plant(new_plant: PlantCreate):
 
             category_data = doc.to_dict()
             category_name = (
-                category_data.get("name") if category_data is not None else None
+                category_data.get("name") if category_data is not None else "Tanaman"
             )
-            categories_to_save[category_name] = doc.reference
+            categories_to_save.append(category_name)
 
             validated_category_refs.append(doc.reference)
 
@@ -85,7 +85,6 @@ async def add_new_plant(new_plant: PlantCreate):
 
         await batch.commit()
 
-
         return SuccessResponse(message="Tanaman berhasil ditambahkan")
     except HTTPException as he:
         raise he
@@ -107,7 +106,7 @@ async def get_all_plants(
     ),
     category_name: Optional[str] = Query(
         None,
-        description="Filter tanaman berdasarkan ID Kategori",
+        description="Filter tanaman berdasarkan nama Kategori",
         example="Tanaman Pangan",
     ),
 ):
@@ -115,12 +114,12 @@ async def get_all_plants(
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
         base_query = plants_ref
 
-        query_for_page = base_query.order_by("__name__")
-
         if category_name:
             base_query = base_query.where(
-                filter=FieldFilter(f"categories.`{category_name}`", "!=", None)
+                filter=FieldFilter("categories", "array_contains", category_name)
             )
+
+        query_for_page = base_query.order_by("__name__")
 
         if start_after_doc_id:
             start_doc_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
@@ -148,11 +147,11 @@ async def get_all_plants(
             response_data = {
                 **plant_data,
                 "id": doc.id,
-                "categories_name": plant_data.get("categories").keys(),
+                "categories_name": plant_data.get("categories"),
             }
             plants.append(PlantResponse(**response_data))
 
-        next_cursor = plants_docs[-1].id
+        next_cursor = plants[-1].id if len(plants) == limit else None
 
         return PlantsCursorResponse(plants=plants, next_cursor=next_cursor)
 
@@ -182,7 +181,7 @@ async def get_plant_by_id(plant_id: str):
             raise HTTPException(status_code=404, detail="Data tanaman kosong.")
 
         cat_dict = plant_data.get("categories")
-        cat_names = cat_dict.keys() if cat_dict is not None else None
+        cat_names = cat_dict
 
         response_data = {**plant_data, "id": plant_doc.id, "categories_name": cat_names}
         return PlantResponse(**response_data)
@@ -216,12 +215,19 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
         if "categories_id" in update_data:
             new_category_ids = update_data.pop("categories_id")
 
-            old_categories_map = (
-                existing_data.get("categories", {}) if existing_data else {}
+            old_categories_name_list = (
+                existing_data.get("categories", []) if existing_data else []
             )
-            old_category_refs = set(old_categories_map.values())
+            old_categories_ref_list = [
+                db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in old_categories_name_list
+            ]
+            old_category_set = set(old_categories_ref_list)
 
-            new_category_refs_map = {}
+            new_category_refs_list = []
+            new_category_name_list = []
             if new_category_ids:
                 cat_refs_to_fetch = [
                     db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
@@ -240,18 +246,19 @@ async def update_plant(plant_id: str, updated_plant: PlantUpdate):
                                 status_code=404,
                                 detail="Satu atau lebih ID kategori baru tidak ditemukan.",
                             )
-                        new_category_refs_map[cat_data.get("name")] = doc.reference
+                        new_category_refs_list.append(doc.reference)
+                        new_category_name_list.append(cat_data.get("name"))
                     else:
                         raise HTTPException(
                             status_code=404,
                             detail="Satu atau lebih ID kategori baru tidak ditemukan.",
                         )
 
-            new_category_refs = set(new_category_refs_map.values())
-            update_data["categories"] = new_category_refs_map  # Siapkan untuk update
+            new_category_refs = set(new_category_refs_list)
+            update_data["categories"] = new_category_name_list  # Siapkan untuk update
 
-            refs_to_increment = new_category_refs - old_category_refs
-            refs_to_decrement = old_category_refs - new_category_refs
+            refs_to_increment = new_category_refs - old_category_set
+            refs_to_decrement = old_category_set - new_category_refs
 
             for ref in refs_to_increment:
                 await ref.update({"plant_count": Increment(1)})
@@ -295,9 +302,15 @@ async def delete_plant(plant_id: str):
         batch.update(metadata_ref, {"total_items": Increment(-1)})
 
         plant_data = plant_doc.to_dict()
-        categories_map = plant_data.get("categories") if plant_data else None
-        if categories_map:
-            for category_ref in categories_map.values():
+        categories_list = plant_data.get("categories") if plant_data else None
+        if categories_list:
+            category_refs = [
+                db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in categories_list
+            ]
+            for category_ref in category_refs:
                 batch.update(category_ref, {"plant_count": Increment(-1)})
 
         await batch.commit()
