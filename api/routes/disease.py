@@ -109,7 +109,7 @@ async def get_all_diseases(
                 category_name = category_doc.to_dict().get("name")
                 if category_name:
                     base_query = base_query.where(
-                        filter=FieldFilter(f"categories.{category_name}", "!=", None)
+                        filter=FieldFilter(f"categories.`{category_name}`", "!=", None)
                     )
             else:
                 return DiseasesCursorResponse(diseases=[], next_cursor=None)
