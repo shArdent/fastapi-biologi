@@ -212,7 +212,7 @@ async def update_password(payload: PasswordReq, uid:str):
 
         auth.update_user(uid=uid, password=payload.password)
 
-        return SuccessResponse(message="Email berhasil diupdate")
+        return SuccessResponse(message="Password berhasil diupdate")
 
     except GoogleCloudError as e:
         raise HTTPException(
