@@ -69,8 +69,8 @@ async def add_new_disease(new_disease: DiseaseCreate):
 
         batch.set(disease_ref, data_to_save)
 
-        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
-            FIRESTORE_DOCUMENT_METADATA
+        meta_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_DISEASES
         )
         batch.set(meta_ref, {"total_items": Increment(1)}, merge=True)
 
@@ -102,7 +102,23 @@ async def get_all_diseases(
     try:
         base_query = db.collection(FIRESTORE_COLLECTION_DISEASES)
 
+        meta_doc = (
+            await db.collection(FIRESTORE_DOCUMENT_METADATA)
+            .document(FIRESTORE_COLLECTION_DISEASES)
+            .get()
+        )
+
+        meta_data = meta_doc.to_dict()
+        total_diseases = meta_data.get("total_items") if meta_data else 0
+
         if category_name and not plant_name:
+            cat_doc = (
+                await db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES)
+                .document(slugify(category_name))
+                .get()
+            )
+            cat_data = cat_doc.to_dict()
+            total_diseases = cat_data.get("disease_count") if cat_data else 0
             base_query = base_query.where(
                 filter=FieldFilter("categories", "array_contains", category_name)
             )
@@ -142,7 +158,7 @@ async def get_all_diseases(
 
         next_cursor = diseases_docs[-1].id if len(diseases_docs) == limit else None
 
-        return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor)
+        return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor, total_items=total_diseases)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -205,7 +221,12 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
             new_ids = update_data.pop("categories_id")
             old_list = existing_data.get("categories", []) if existing_data else []
 
-            old_refs = [db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(slugify(name)) for name in old_list]
+            old_refs = [
+                db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in old_list
+            ]
             old_refs = set(old_refs)
 
             new_refs_list = []
@@ -218,7 +239,7 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
                 cat_docs = [doc async for doc in db.get_all(cat_refs)]
                 for doc in cat_docs:
                     if doc.exists:
-                        new_name_list.append(doc.to_dict().get("name")) 
+                        new_name_list.append(doc.to_dict().get("name"))
                         new_refs_list.append(doc.reference)
                     else:
                         raise HTTPException(
@@ -262,8 +283,8 @@ async def delete_disease(disease_id: str):
         batch.delete(disease_ref)
 
         # Decrement metadata
-        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
-            FIRESTORE_DOCUMENT_METADATA
+        meta_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_DISEASES
         )
         batch.update(meta_ref, {"total_items": Increment(-1)})
 
@@ -271,7 +292,12 @@ async def delete_disease(disease_id: str):
         disease_data = disease_doc.to_dict()
         categories_list = disease_data.get("categories")
         if categories_list:
-            cat_refs = [db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(slugify(name)) for name in categories_list]
+            cat_refs = [
+                db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in categories_list
+            ]
             for cat_ref in cat_refs:
                 batch.update(cat_ref, {"disease_count": Increment(-1)})
 

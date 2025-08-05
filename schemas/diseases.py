@@ -40,3 +40,4 @@ class DiseaseResponse(DiseaseBase):
 class DiseasesCursorResponse(BaseModel):
     diseases: List[DiseaseResponse]
     next_cursor: Optional[str]
+    total_items: int

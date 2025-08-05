@@ -74,8 +74,8 @@ async def add_new_plant(new_plant: PlantCreate):
 
         batch.set(plant_ref, data_to_save)
 
-        metadata_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
-            FIRESTORE_DOCUMENT_METADATA
+        metadata_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_PLANTS
         )
 
         batch.set(metadata_ref, {"total_items": Increment(1)}, merge=True)
@@ -114,7 +114,24 @@ async def get_all_plants(
         plants_ref = db.collection(FIRESTORE_COLLECTION_PLANTS)
         base_query = plants_ref
 
+        metadata_ref = (
+            await db.collection(FIRESTORE_DOCUMENT_METADATA)
+            .document(FIRESTORE_COLLECTION_PLANTS)
+            .get()
+        )
+
+        meta_data = metadata_ref.to_dict()
+
+        total_plants = meta_data.get("total_items") if meta_data else 0
+
         if category_name:
+            category_doc = (
+                await db.collection(FIRESTORE_COLLECTION_PLANT_CATEGORIES)
+                .document(slugify(category_name))
+                .get()
+            )
+            category_data = category_doc.to_dict()
+            total_plants = category_data.get("plant_count") if category_data else 0
             base_query = base_query.where(
                 filter=FieldFilter("categories", "array_contains", category_name)
             )
@@ -136,7 +153,7 @@ async def get_all_plants(
                 plants_docs.append(doc)
 
         if not plants_docs:
-            return PlantsCursorResponse(plants=[], next_cursor=None)
+            return PlantsCursorResponse(plants=[], next_cursor=None, total_items=0)
 
         plants = []
         for doc in plants_docs:
@@ -153,7 +170,9 @@ async def get_all_plants(
 
         next_cursor = plants[-1].id if len(plants) == limit else None
 
-        return PlantsCursorResponse(plants=plants, next_cursor=next_cursor)
+        return PlantsCursorResponse(
+            plants=plants, next_cursor=next_cursor, total_items=total_plants
+        )
 
     except HTTPException as he:
         raise he
@@ -296,8 +315,8 @@ async def delete_plant(plant_id: str):
 
         batch.delete(plant_ref)
 
-        metadata_ref = db.collection(FIRESTORE_COLLECTION_PLANTS).document(
-            FIRESTORE_DOCUMENT_METADATA
+        metadata_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_PLANTS
         )
         batch.update(metadata_ref, {"total_items": Increment(-1)})
 

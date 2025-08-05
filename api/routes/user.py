@@ -22,6 +22,7 @@ from utils.middlewares.verify_token import verify_firebase_token
 from constants.collection_name import (
     FIRESTORE_COLLECTION_USERS,
 )
+from utils.middlewares.verify_user_id_match import verify_user_id_match
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -109,7 +110,7 @@ async def register_admin(user=Depends(verify_firebase_token)):
         )
 
 
-@router.patch("/{uid}", response_model=SuccessResponse, dependencies=[Depends(verify_firebase_token)])
+@router.patch("/{uid}", response_model=SuccessResponse, dependencies=[Depends(verify_user_id_match)])
 async def update_user(update_data: UserUpdate, uid:str):
     if not update_data.model_dump(exclude_unset=True):
         raise HTTPException(
@@ -150,7 +151,7 @@ async def update_user(update_data: UserUpdate, uid:str):
         )
 
 
-@router.patch("/email/{uid}", dependencies=[Depends(verify_firebase_token)])
+@router.patch("/email/{uid}", dependencies=[Depends(verify_user_id_match)])
 async def update_email(payload: EmailReq, uid:str):
     if not payload.model_dump(exclude_unset=True):
         raise HTTPException(
@@ -193,7 +194,7 @@ async def update_email(payload: EmailReq, uid:str):
         )
 
 
-@router.patch("/password/{uid}", dependencies=[Depends(verify_firebase_token)],)
+@router.patch("/password/{uid}", dependencies=[Depends(verify_user_id_match)],)
 async def update_password(payload: PasswordReq, uid:str):
     if not payload.model_dump(exclude_unset=True):
         raise HTTPException(

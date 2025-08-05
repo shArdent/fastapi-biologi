@@ -71,6 +71,7 @@ class PlantResponse(PlantBase):
 class PlantsCursorResponse(BaseModel):
     plants: List[PlantResponse]
     next_cursor: Optional[str]
+    total_items: int
 
 
 class PlantsPaginatedResponse(BaseModel):

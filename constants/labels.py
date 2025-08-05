@@ -42,8 +42,8 @@ class_names = [
 plant_translate = {
     "Apple": "apel",
     "Blueberry": "blueberry",
-    "Cherry (including sour)": "ceri",
-    "Corn (maize)": "jagung",
+    "Cherry including sour": "ceri",
+    "Corn maize": "jagung",
     "Grape": "anggur",
     "Orange": "jeruk",
     "Peach": "persik",
