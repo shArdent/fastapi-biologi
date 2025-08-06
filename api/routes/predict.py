@@ -38,7 +38,13 @@ async def try_acquire(sem: asyncio.Semaphore, timeout=0.01) -> bool:
 @router.post(
     "/", response_model=PredictResponse, dependencies=[Depends(verify_firebase_token)]
 )
-async def predict_image(request: Request, file: UploadFile = File(...)):
+async def predict_image(
+    request: Request,
+    file: UploadFile = File(...),
+    lm: bool = Query(
+        False, description="Learning Mode: True untuk mengaktifkan cam_image"
+    ),
+):
     acquired = await try_acquire(concurrent_limit)
     if not acquired:
         raise HTTPException(
@@ -74,17 +80,17 @@ async def predict_image(request: Request, file: UploadFile = File(...)):
         )
 
         cam_base64 = None
-        # if not is_healthy:
-        #     grad_model = request.app.state.grad_model
-        #     heatmap = await loop.run_in_executor(
-        #         None, get_gradcam_heatmap, grad_model, img_preprocessed, "top_conv", class_index
-        #     )
-        #     cam_image = overlay_bounding_boxes(image, heatmap)
-        #     cam_base64 = image_to_base64(cam_image)
+        if not is_healthy and lm:
+            grad_model = request.app.state.grad_model
+            heatmap = await loop.run_in_executor(
+                None, get_gradcam_heatmap, grad_model, img_preprocessed, class_index
+            )
+            cam_image = overlay_bounding_boxes(image, heatmap)
+            cam_base64 = image_to_base64(cam_image)
 
         return PredictResponse(
             plant=slugify(plant_name),
-            disease=slugify(disease_name),
+            disease=f"{plant_name}_{slugify(disease_name)}",
             confidence=(round(confidence, 4)),
             message=readable_text,
             cam_image=cam_base64,
@@ -125,8 +131,11 @@ async def get_plant_and_disease_detail(
         cat_dict = plant_data.get("categories")
         cat_names = cat_dict.keys() if cat_dict is not None else None
 
-
-        plant_response = {**plant_data, "id": plant_doc.id, "categories_name": cat_names}
+        plant_response = {
+            **plant_data,
+            "id": plant_doc.id,
+            "categories_name": cat_names,
+        }
         plant = PlantResponse(**plant_response)
 
         disease = None
