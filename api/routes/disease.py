@@ -33,7 +33,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
 )
 async def add_new_disease(new_disease: DiseaseCreate):
     try:
-        disease_id = slugify(new_disease.name)
+        disease_id = f"{new_disease.plants_listed[0].lower()}_{slugify(new_disease.name)}"
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
 
         if (await disease_ref.get()).exists:

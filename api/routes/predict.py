@@ -90,7 +90,7 @@ async def predict_image(
 
         return PredictResponse(
             plant=slugify(plant_name),
-            disease=slugify(disease_name),
+            disease=f"{plant_name}_{slugify(disease_name)}",
             confidence=(round(confidence, 4)),
             message=readable_text,
             cam_image=cam_base64,
