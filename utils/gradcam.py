@@ -3,9 +3,7 @@ import numpy as np
 import cv2
 
 
-def get_gradcam_heatmap(mod, img_array, conv_layer_name, class_index=None):
-    layer = mod.get_layer(conv_layer_name)
-    grad_model = tf.keras.models.Model([mod.input], [layer.output, mod.output])
+def get_gradcam_heatmap(grad_model, img_array, class_index=None):
     with tf.GradientTape() as tape:
         conv_outputs, predictions = grad_model(img_array)
         output_shape = conv_outputs.shape

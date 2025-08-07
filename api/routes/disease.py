@@ -33,7 +33,7 @@ router = APIRouter(prefix="/diseases", tags=["diseases"])
 )
 async def add_new_disease(new_disease: DiseaseCreate):
     try:
-        disease_id = slugify(new_disease.name)
+        disease_id = f"{new_disease.plants_listed[0].lower()}_{slugify(new_disease.name)}"
         disease_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(disease_id)
 
         if (await disease_ref.get()).exists:
@@ -42,7 +42,8 @@ async def add_new_disease(new_disease: DiseaseCreate):
                 detail=f"Penyakit dengan nama '{new_disease.name}' sudah ada.",
             )
 
-        categories_map = {}
+        categories_list = []
+        categories_ref = []
         if new_disease.categories_id:
             cat_refs = [
                 db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(cat_id)
@@ -52,7 +53,8 @@ async def add_new_disease(new_disease: DiseaseCreate):
             for doc in cat_docs:
                 if doc.exists:
                     cat_data = doc.to_dict()
-                    categories_map[cat_data.get("name")] = doc.reference
+                    categories_list.append(cat_data.get("name"))
+                    categories_ref = cat_refs
                 else:
                     raise HTTPException(
                         status_code=404,
@@ -63,16 +65,16 @@ async def add_new_disease(new_disease: DiseaseCreate):
 
         data_to_save = new_disease.model_dump()
         data_to_save.pop("categories_id")
-        data_to_save["categories"] = categories_map
+        data_to_save["categories"] = categories_list
 
         batch.set(disease_ref, data_to_save)
 
-        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
-            FIRESTORE_DOCUMENT_METADATA
+        meta_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_DISEASES
         )
         batch.set(meta_ref, {"total_items": Increment(1)}, merge=True)
 
-        for cat_ref in categories_map.values():
+        for cat_ref in categories_ref:
             batch.update(cat_ref, {"disease_count": Increment(1)})
 
         await batch.commit()
@@ -94,27 +96,34 @@ async def add_new_disease(new_disease: DiseaseCreate):
 async def get_all_diseases(
     limit: int = Query(10, ge=1, le=100),
     start_after_doc_id: Optional[str] = Query(None),
-    category_id: Optional[str] = Query(None),
+    category_name: Optional[str] = Query(None),
     plant_name: Optional[str] = Query(None, description="Nama tanaman"),
 ):
     try:
         base_query = db.collection(FIRESTORE_COLLECTION_DISEASES)
 
-        if category_id:
-            category_ref = db.collection(
-                FIRESTORE_COLLECTION_DISEASE_CATEGORIES
-            ).document(category_id)
-            category_doc = await category_ref.get()
-            if category_doc.exists:
-                category_name = category_doc.to_dict().get("name")
-                if category_name:
-                    base_query = base_query.where(
-                        filter=FieldFilter(f"categories.{category_name}", "!=", None)
-                    )
-            else:
-                return DiseasesCursorResponse(diseases=[], next_cursor=None)
+        meta_doc = (
+            await db.collection(FIRESTORE_DOCUMENT_METADATA)
+            .document(FIRESTORE_COLLECTION_DISEASES)
+            .get()
+        )
 
-        if plant_name:
+        meta_data = meta_doc.to_dict()
+        total_diseases = meta_data.get("total_items") if meta_data else 0
+
+        if category_name and not plant_name:
+            cat_doc = (
+                await db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES)
+                .document(slugify(category_name))
+                .get()
+            )
+            cat_data = cat_doc.to_dict()
+            total_diseases = cat_data.get("disease_count") if cat_data else 0
+            base_query = base_query.where(
+                filter=FieldFilter("categories", "array_contains", category_name)
+            )
+
+        if plant_name and not category_name:
             base_query = base_query.where(
                 filter=FieldFilter("plants_listed", "array_contains", plant_name)
             )
@@ -143,13 +152,13 @@ async def get_all_diseases(
             response_data = {
                 **disease_data,
                 "id": doc.id,
-                "categories_name": disease_data.get("categories").keys(),
+                "categories_name": disease_data.get("categories"),
             }
             diseases.append(DiseaseResponse(**response_data))
 
         next_cursor = diseases_docs[-1].id if len(diseases_docs) == limit else None
 
-        return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor)
+        return DiseasesCursorResponse(diseases=diseases, next_cursor=next_cursor, total_items=total_diseases)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -174,8 +183,7 @@ async def get_disease_by_id(disease_id: str):
         if not disease_data:
             raise HTTPException(status_code=404, detail="Data penyakit rusak.")
 
-        cat_dict = disease_data.get("categories")
-        cat_names = cat_dict.keys() if cat_dict is not None else None
+        cat_names = disease_data.get("categories")
 
         response_data = {
             **disease_data,
@@ -211,10 +219,18 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
 
         if "categories_id" in update_data:
             new_ids = update_data.pop("categories_id")
-            old_map = existing_data.get("categories", {})
-            old_refs = set(old_map.values())
+            old_list = existing_data.get("categories", []) if existing_data else []
 
-            new_map = {}
+            old_refs = [
+                db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in old_list
+            ]
+            old_refs = set(old_refs)
+
+            new_refs_list = []
+            new_name_list = []
             if new_ids:
                 cat_refs = [
                     db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(cid)
@@ -223,19 +239,20 @@ async def update_disease(disease_id: str, updated_disease: DiseaseUpdate):
                 cat_docs = [doc async for doc in db.get_all(cat_refs)]
                 for doc in cat_docs:
                     if doc.exists:
-                        new_map[doc.to_dict().get("name")] = doc.reference
+                        new_name_list.append(doc.to_dict().get("name"))
+                        new_refs_list.append(doc.reference)
                     else:
                         raise HTTPException(
                             status_code=404, detail="ID kategori baru tidak ditemukan."
                         )
 
-            new_refs = set(new_map.values())
-            update_data["categories"] = new_map
+            new_refs = set(new_refs_list)
+            update_data["categories"] = new_name_list
 
             for ref in new_refs - old_refs:
-                ref.update({"disease_count": Increment(1)})
+                await ref.update({"disease_count": Increment(1)})
             for ref in old_refs - new_refs:
-                ref.update({"disease_count": Increment(-1)})
+                await ref.update({"disease_count": Increment(-1)})
 
         await disease_ref.update(update_data)
 
@@ -266,16 +283,22 @@ async def delete_disease(disease_id: str):
         batch.delete(disease_ref)
 
         # Decrement metadata
-        meta_ref = db.collection(FIRESTORE_COLLECTION_DISEASES).document(
-            FIRESTORE_DOCUMENT_METADATA
+        meta_ref = db.collection(FIRESTORE_DOCUMENT_METADATA).document(
+            FIRESTORE_COLLECTION_DISEASES
         )
         batch.update(meta_ref, {"total_items": Increment(-1)})
 
         # Decrement semua kategori terkait
         disease_data = disease_doc.to_dict()
-        categories_map = disease_data.get("categories")
-        if categories_map:
-            for cat_ref in categories_map.values():
+        categories_list = disease_data.get("categories")
+        if categories_list:
+            cat_refs = [
+                db.collection(FIRESTORE_COLLECTION_DISEASE_CATEGORIES).document(
+                    slugify(name)
+                )
+                for name in categories_list
+            ]
+            for cat_ref in cat_refs:
                 batch.update(cat_ref, {"disease_count": Increment(-1)})
 
         await batch.commit()

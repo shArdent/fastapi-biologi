@@ -5,7 +5,8 @@ firebase-admin
 python-multipart
 python-dotenv
 opencv-python-headless
-tensorflow-cpu
+tensorflow-cpu==2.16.1
+keras==3.8.0
 pillow
 gdown
 imagekitio

@@ -7,3 +7,5 @@ creds/
 .env
 .idea/
 .vscode
+
+index.html

@@ -10,7 +10,7 @@ class DiseaseBase(BaseModel):
     preventions: str
     causes: str
     treatments: str
-    latin_name: str
+    latin_name: Optional[str]
     images: list[str] = Field(default_factory=list, description="Daftar URL gambar")
 
 
@@ -40,3 +40,4 @@ class DiseaseResponse(DiseaseBase):
 class DiseasesCursorResponse(BaseModel):
     diseases: List[DiseaseResponse]
     next_cursor: Optional[str]
+    total_items: int
