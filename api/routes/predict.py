@@ -128,8 +128,7 @@ async def get_plant_and_disease_detail(
                 detail=f"Data tanaman dengan ID '{plant_id}' tidak valid",
             )
 
-        cat_dict = plant_data.get("categories")
-        cat_names = cat_dict.keys() if cat_dict is not None else None
+        cat_names = plant_data.get("categories")
 
         plant_response = {
             **plant_data,
@@ -156,8 +155,7 @@ async def get_plant_and_disease_detail(
                     detail=f"Data penyakit dengan ID '{disease_id}' tidak valid",
                 )
 
-            cat_dict = disease_data.get("categories")
-            cat_names = cat_dict.keys() if cat_dict is not None else None
+            cat_names = disease_data.get("categories")
 
             disease_response = {
                 **disease_data,
