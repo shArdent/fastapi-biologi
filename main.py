@@ -32,19 +32,19 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def get_cors_origins():
+    origins = os.getenv("CORS_ORIGINS", "")
+    return [origin.strip() for origin in origins.split(",") if origin.strip()]
+
+
+origins = get_cors_origins()
+
 app = FastAPI(
     title="API Deteksi Penyakit Tanaman",
     description="API Project penelitian biologi deteksi penyakit & hama tanaman",
     version="1.0.0",
     lifespan=lifespan,
 )
-
-
-origins = [
-    "http://localhost:3000",  # contoh frontend lokal
-    "http://localhost:5173",  # contoh frontend lokal
-    "https://your-frontend-domain.com",  # frontend production
-]
 
 app.add_middleware(
     CORSMiddleware,
