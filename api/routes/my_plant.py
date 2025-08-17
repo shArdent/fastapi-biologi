@@ -30,17 +30,17 @@ router = APIRouter(prefix="/my-plants", tags=["my plants"])
 
 
 @router.post(
-    "/{user_id}",
+    "/{uid}",
     response_model=SuccessCreatePlant,
     status_code=status.HTTP_201_CREATED,
 )
 async def add_my_plant(
-    user_id: str, myplant_data: MyPlantCreate, _: dict = Depends(verify_user_id_match)
+    uid: str, myplant_data: MyPlantCreate, _: dict = Depends(verify_user_id_match)
 ):
     try:
         my_plants_collection = (
             db.collection(FIRESTORE_COLLECTION_USERS)
-            .document(user_id)
+            .document(uid)
             .collection(FIRESTORE_COLLECTION_MY_PLANTS)
         )
 
@@ -93,7 +93,7 @@ async def add_my_plant(
 
         return SuccessCreatePlant(
             message="Tanaman berhasil ditambahkan!",
-            user_id=user_id,
+            user_id=uid,
             new_plant_id=new_plant_ref.id,
         )
 
@@ -103,9 +103,9 @@ async def add_my_plant(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{user_id}", response_model=PaginatedMyPlantSummary)
+@router.get("/{uid}", response_model=PaginatedMyPlantSummary)
 async def get_all_my_plants(
-    user_id: str,
+    uid: str,
     page_size: int = Query(10, gt=0, le=50),
     last_doc_id: Optional[str] = None,
     _: dict = Depends(verify_user_id_match),
@@ -113,7 +113,7 @@ async def get_all_my_plants(
     try:
         my_plants_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
-            .document(user_id)
+            .document(uid)
             .collection(FIRESTORE_COLLECTION_MY_PLANTS)
         )
 
@@ -154,12 +154,12 @@ async def get_all_my_plants(
 
 
 @router.patch(
-    "/{user_id}/d/{my_plant_id}",
+    "/{uid}/d/{my_plant_id}",
     status_code=status.HTTP_200_OK,
     response_model=SuccessUpdatePlant,
 )
 async def update_my_plant(
-    user_id: str,
+    uid: str,
     my_plant_id: str,
     plant_update_data: MyPlantUpdate,
     _: dict = Depends(verify_user_id_match),
@@ -167,7 +167,7 @@ async def update_my_plant(
     try:
         myplant_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
-            .document(user_id)
+            .document(uid)
             .collection(FIRESTORE_COLLECTION_MY_PLANTS)
             .document(my_plant_id)
         )
@@ -179,7 +179,6 @@ async def update_my_plant(
                 detail=f"Tanaman dengan ID '{my_plant_id}' tidak ditemukan.",
             )
 
-        print(plant_update_data.disease_id)
         data_to_update = {}
 
         if plant_update_data.nickname is not None:
@@ -227,14 +226,14 @@ async def update_my_plant(
         )
 
 
-@router.delete("/{user_id}/d/{my_plant_id}", response_model=SuccessResponse)
+@router.delete("/{uid}/d/{my_plant_id}", response_model=SuccessResponse)
 async def delete_my_plant(
-    user_id: str, my_plant_id: str, _: dict = Depends(verify_user_id_match)
+    uid: str, my_plant_id: str, _: dict = Depends(verify_user_id_match)
 ):
     try:
         doc_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
-            .document(user_id)
+            .document(uid)
             .collection(FIRESTORE_COLLECTION_MY_PLANTS)
             .document(my_plant_id)
         )
@@ -249,7 +248,7 @@ async def delete_my_plant(
 
         meta_ref = (
             db.collection(FIRESTORE_COLLECTION_USERS)
-            .document(user_id)
+            .document(uid)
             .collection(FIRESTORE_COLLECTION_MY_PLANTS)
             .document(FIRESTORE_DOCUMENT_METADATA)
         )
