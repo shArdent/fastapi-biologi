@@ -4,13 +4,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # from fastapi_cache import FastAPICache
 # from fastapi_cache.backends.redis import RedisBackend
-from redis import asyncio as redis
+# from redis import asyncio as redis
 from contextlib import asynccontextmanager
 
 import os
 
 from api.main import api_router
-from utils.key_builder import no_auth_header_key_builder
+# from utils.key_builder import no_auth_header_key_builder
 from utils.load_model import download_model, load_model
 
 load_dotenv()
