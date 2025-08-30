@@ -1,5 +1,5 @@
 class_names = [
-    "Apple___Apple_scab",
+    "Apple___Bercak_hitam_apel",
     "Apple___Black_rot",
     "Apple___Cedar_apple_rust",
     "Apple___healthy",
@@ -11,8 +11,8 @@ class_names = [
     "Corn_(maize)___Northern_Leaf_Blight_nclb",
     "Corn_(maize)___healthy",
     "Grape___Black_rot",
-    "Grape___Esca_Black_Measles",
-    "Grape___Isariopsis_Leaf_Spot",
+    "Grape___Esca_black_measles",
+    "Grape___Isariopsis_leaf_spot",
     "Grape___healthy",
     "Orange___Citrus_greening_hlb",
     "Peach___Bacterial_spot",
