@@ -10,6 +10,7 @@ from api.routes import (
     plant_categories,
     disease_categories,
     upload,
+    setting,
 )
 
 api_router = APIRouter(prefix="/v1")
@@ -23,3 +24,4 @@ api_router.include_router(my_plant.router)
 api_router.include_router(plant_categories.router)
 api_router.include_router(disease_categories.router)
 api_router.include_router(upload.router)
+api_router.include_router(setting.router)
