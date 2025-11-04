@@ -14,7 +14,7 @@ from db.firestore import db
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-@router.get("/", dependencies=[Depends(verify_firebase_token)])
+@router.get("/", response_model=Settings,dependencies=[Depends(verify_firebase_token)])
 async def get_all_settings():
     try:
         setting_doc = await (
