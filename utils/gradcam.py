@@ -44,3 +44,36 @@ def overlay_bounding_boxes(
         x, y, w, h = cv2.boundingRect(cnt)
         cv2.rectangle(img, (x, y), (x + w, y + h), box_color, box_width)
     return img
+
+
+def overlay_heatmap(img_pil, heatmap: np.ndarray, alpha: float = 0.45) -> np.ndarray:
+    img = np.array(img_pil.resize((224, 224)), dtype=np.uint8)
+    heatmap_resized = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    heatmap_colored = cv2.applyColorMap(
+        np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET
+    )
+    superimposed_img: np.ndarray = cv2.addWeighted(
+        img, 1 - alpha, heatmap_colored, alpha, 0
+    )
+    return superimposed_img
+
+
+def overlay_heatmap_with_boxes(
+    img_pil, heatmap, alpha=0.45, threshold=0.25, box_color=(0, 255, 0), box_width=2
+):
+    img = np.array(img_pil.resize((224, 224))).astype(np.uint8).copy()
+    heatmap_resized = cv2.resize(heatmap, (img.shape[1], img.shape[0]))
+    heatmap_colored = cv2.applyColorMap(
+        np.uint8(255 * heatmap_resized), cv2.COLORMAP_JET
+    )
+    superimposed_img = cv2.addWeighted(img, 1 - alpha, heatmap_colored, alpha, 0)
+    _, binary_map = cv2.threshold(
+        np.uint8(255 * heatmap_resized), int(threshold * 255), 255, cv2.THRESH_BINARY
+    )
+    contours, _ = cv2.findContours(
+        binary_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        cv2.rectangle(superimposed_img, (x, y), (x + w, y + h), box_color, box_width)
+    return superimposed_img
