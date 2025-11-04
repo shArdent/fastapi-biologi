@@ -1,3 +1,4 @@
+from enum import Enum
 import io
 import asyncio
 from typing import Optional
@@ -9,7 +10,12 @@ import numpy as np
 from schemas.plants import PlantResponse
 from schemas.predict_response import PredictResponse, PlantDetail
 from utils.decode_prediction import decode_prediction
-from utils.gradcam import get_gradcam_heatmap, overlay_bounding_boxes
+from utils.gradcam import (
+    get_gradcam_heatmap,
+    overlay_bounding_boxes,
+    overlay_heatmap,
+    overlay_heatmap_with_boxes,
+)
 from utils.image_to_base64 import image_to_base64
 from utils.middlewares.verify_token import verify_firebase_token
 from schemas.diseases import DiseaseResponse
@@ -17,10 +23,19 @@ from db.firestore import db
 from constants.collection_name import (
     FIRESTORE_COLLECTION_DISEASES,
     FIRESTORE_COLLECTION_PLANTS,
+    FIRESTORE_COLLECTION_SETTINGS,
+    FIRESTORE_DOCUMENT_OUTPUT_SETTING,
 )
 from constants.labels import class_names
 from utils.preprocess_image import preprocess_image
 from utils.slugify import slugify
+
+
+class ImageOutputOption(str, Enum):
+    HEATMAP = "heatmap"
+    BBOX = "bbox"
+    BBOX_HEATMAP = "bbox_heatmap"
+
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
@@ -41,6 +56,9 @@ async def try_acquire(sem: asyncio.Semaphore, timeout=0.01) -> bool:
 async def predict_image(
     request: Request,
     file: UploadFile = File(...),
+    option: ImageOutputOption = Query(
+        ..., description="Opsi output gambar: heatmap | bbox | bbox_heatmap"
+    ),
     lm: bool = Query(
         False, description="Learning Mode: True untuk mengaktifkan cam_image"
     ),
@@ -51,17 +69,30 @@ async def predict_image(
             status_code=503, detail="Server sedang sibuk, silakan coba lagi nanti."
         )
     try:
+        if lm:
+            setting_doc = await (
+                db.collection(FIRESTORE_COLLECTION_SETTINGS)
+                .document(FIRESTORE_DOCUMENT_OUTPUT_SETTING)
+                .get()
+            )
+            setting_data = setting_doc.to_dict() or {}
+
+            option_key = option.value
+            if not setting_data.get(option_key, False):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Opsi output '{option_key}' tidak tersedia.",
+                )
+
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data)).convert("RGB")
         img_preprocessed = preprocess_image(image)
 
         env2 = request.app.state.env2
-
         loop = asyncio.get_event_loop()
-
         prediction = await loop.run_in_executor(None, env2.predict, img_preprocessed)
-        pred_values = prediction[0]
 
+        pred_values = prediction[0]
         class_index = int(np.argmax(pred_values))
         confidence = float(np.max(pred_values))
 
@@ -85,8 +116,19 @@ async def predict_image(
             heatmap = await loop.run_in_executor(
                 None, get_gradcam_heatmap, grad_model, img_preprocessed, class_index
             )
-            cam_image = overlay_bounding_boxes(image, heatmap)
-            cam_base64 = image_to_base64(cam_image)
+
+            overlay_map = {
+                ImageOutputOption.BBOX: overlay_bounding_boxes,
+                ImageOutputOption.HEATMAP: overlay_heatmap,
+                ImageOutputOption.BBOX_HEATMAP: overlay_heatmap_with_boxes,
+            }
+
+            overlay_func = overlay_map.get(option)
+
+            if overlay_func:
+                cam_image = overlay_func(image, heatmap)
+                cam_image = np.clip(cam_image, 0, 255).astype(np.uint8)
+                cam_base64 = image_to_base64(cam_image)
 
         return PredictResponse(
             plant=slugify(plant_name),
@@ -96,6 +138,8 @@ async def predict_image(
             cam_image=cam_base64,
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error during prediction: {e}")
     finally:
